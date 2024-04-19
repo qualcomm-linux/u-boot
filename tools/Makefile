@@ -267,11 +267,13 @@ HOSTCFLAGS_mkeficapsule.o += \
 	$(shell pkg-config --cflags gnutls 2> /dev/null || echo "")
 HOSTLDLIBS_mkeficapsule += \
 	$(shell pkg-config --libs gnutls 2> /dev/null || echo "-lgnutls")
-mkeficapsule-objs := generated/lib/uuid.o \
-	generated/lib/sha1.o \
-	$(LIBFDT_OBJS) \
-	mkeficapsule.o
+HOSTLDLIBS_mkeficapsule += \
+	$(shell pkg-config --libs uuid 2> /dev/null || echo "-luuid")
 hostprogs-always-$(CONFIG_TOOLS_MKEFICAPSULE) += mkeficapsule
+mkeficapsule-objs := mkeficapsule.o mkeficapsule_parse.o \
+		     generated/lib/uuid.o \
+		     generated/lib/sha1.o \
+		     $(LIBFDT_OBJS)
 
 include tools/fwumdata_src/fwumdata.mk
 
