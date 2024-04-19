@@ -93,6 +93,17 @@ def efi_capsule_data(request, ubman):
                                  'test_efi_capsule', mnt_point)
         check_call(f'dd conv=notrunc if={fsfile} of={image_path} bs=1M seek=1', shell=True)
         check_call('sgdisk --mbrtogpt %s' % image_path, shell=True)
+
+        capsule_cfg_file_gen = ubman.config.buildconfig.get('config_efi_use_capsule_cfg_file')
+        if capsule_cfg_file_gen:
+            cfg_file = ubman.config.source_dir + '/' +  ubman.config.buildconfig.get('config_efi_capsule_cfg_file')[1:-1]
+            check_call('cd %s; '
+                       '%s/tools/mkeficapsule -f %s'
+                       % (data_dir, ubman.config.build_dir, cfg_file), shell=True)
+
+        # Create a disk image with EFI system partition
+        check_call('virt-make-fs --partition=gpt --size=+1M --type=vfat %s %s' %
+                   (mnt_point, image_path), shell=True)
         check_call('sgdisk %s -A 1:set:0 -t 1:C12A7328-F81F-11D2-BA4B-00A0C93EC93B' %
                    image_path, shell=True)
         call('rm -f %s' % fsfile, shell=True)
