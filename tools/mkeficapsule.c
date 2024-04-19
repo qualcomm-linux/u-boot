@@ -35,13 +35,7 @@ static const char *tool_name = "mkeficapsule";
 efi_guid_t efi_guid_fm_capsule = EFI_FIRMWARE_MANAGEMENT_CAPSULE_ID_GUID;
 efi_guid_t efi_guid_cert_type_pkcs7 = EFI_CERT_TYPE_PKCS7_GUID;
 
-static const char *opts_short = "g:i:I:v:p:c:m:o:dhARDV";
-
-enum {
-	CAPSULE_NORMAL_BLOB = 0,
-	CAPSULE_ACCEPT,
-	CAPSULE_REVERT,
-} capsule_type;
+static const char *opts_short = "g:i:I:v:p:c:m:o:f:dhARDV";
 
 static struct option options[] = {
 	{"guid", required_argument, NULL, 'g'},
@@ -57,6 +51,7 @@ static struct option options[] = {
 	{"capoemflag", required_argument, NULL, 'o'},
 	{"dump-capsule", no_argument, NULL, 'D'},
 	{"dump-sig", no_argument, NULL, 'd'},
+	{"cfg-file", required_argument, NULL, 'f'},
 	{"help", no_argument, NULL, 'h'},
 	{NULL, 0, NULL, 0},
 };
@@ -72,7 +67,16 @@ static void print_usage_guidgen(void)
 		tool_name, DEFAULT_NAMESPACE_GUID);
 }
 
-static void print_usage_mkeficapsule(void)
+/**
+ * print_usage() - Print the command usage string
+ *
+ * Prints the standard command usage string. Called in the case
+ * of incorrect parameters being passed to the tool.
+ *
+ * Return: None
+ *
+ */
+void print_usage(void)
 {
 	fprintf(stderr, "Usage:\n\n%s [options] <image blob> <output file>\n"
 		"Options:\n"
@@ -90,7 +94,8 @@ static void print_usage_mkeficapsule(void)
 		"\t-o, --capoemflag Capsule OEM Flag, an integer between 0x0000 and 0xffff\n"
 		"\t-D, --dump-capsule          dump the contents of the capsule headers\n"
 		"\t-V, --version               show version number\n"
-		"\t-h, --help                  print a help message\n\n",
+		"\t-f, --cfg-file <config file> config file with capsule parameters\n"
+		"\t-h, --help                  print a help message\n",
 		tool_name);
 	print_usage_guidgen();
 }
@@ -469,6 +474,7 @@ static void free_sig_data(struct auth_context *ctx)
  * @guid:	GUID of related FMP driver
  * @index:	Index number in capsule
  * @instance:	Instance number in capsule
+ * @fmp:	FMP header params
  * @mcount:	Monotonic count in authentication information
  * @private_file:	Path to a private key file
  * @cert_file:	Path to a certificate file
@@ -483,11 +489,11 @@ static void free_sig_data(struct auth_context *ctx)
  * * 0  - on success
  * * -1 - on failure
  */
-static int create_fwbin(char *path, char *bin, efi_guid_t *guid,
-			unsigned long index, unsigned long instance,
-			struct fmp_payload_header_params *fmp_ph_params,
-			uint64_t mcount, char *privkey_file, char *cert_file,
-			uint16_t oemflags)
+int create_fwbin(char *path, char *bin, efi_guid_t *guid,
+		 unsigned long index, unsigned long instance,
+		 struct fmp_payload_header_params *fmp_ph_params,
+		 uint64_t mcount, char *privkey_file, char *cert_file,
+		 uint16_t oemflags)
 {
 	struct efi_capsule_header header;
 	struct efi_firmware_management_capsule_header capsule;
@@ -654,7 +660,21 @@ err:
 	return ret;
 }
 
-static int create_empty_capsule(char *path, efi_guid_t *guid, bool fw_accept)
+/**
+ * create_empty_capsule() - Generate an empty capsule
+ * @path: Path to the empty capsule file to be generated
+ * @guid: Guid value of the image for which empty capsule is generated
+ * @fw_accept: Flag to specify whether to generate accept or revert capsule
+ *
+ * Generate an empty capsule, either an accept or a revert capsule to be
+ * used to flag acceptance or rejection of an earlier executed firmware
+ * update operation. Being used in the FWU Multi Bank firmware update
+ * feature.
+ *
+ * Return: 0 if OK, -ve on error
+ *
+ */
+int create_empty_capsule(char *path, efi_guid_t *guid, bool fw_accept)
 {
 	struct efi_capsule_header header = { 0 };
 	FILE *f = NULL;
@@ -1040,6 +1060,8 @@ int main(int argc, char **argv)
 	unsigned long oemflags;
 	bool capsule_dump;
 	char *privkey_file, *cert_file;
+	char *cfg_file;
+	enum capsule_type capsule_type;
 	int c, idx;
 	struct fmp_payload_header_params fmp_ph_params = { 0 };
 
@@ -1057,6 +1079,7 @@ int main(int argc, char **argv)
 	privkey_file = NULL;
 	cert_file = NULL;
 	capsule_dump = false;
+	cfg_file = NULL;
 	dump_sig = 0;
 	capsule_type = CAPSULE_NORMAL_BLOB;
 	oemflags = 0;
@@ -1139,9 +1162,12 @@ int main(int argc, char **argv)
 			break;
 		case 'V':
 			printf("mkeficapsule version %s\n", PLAIN_VERSION);
+		case 'f':
+			cfg_file = optarg;
+			capsule_with_cfg_file(cfg_file);
 			exit(EXIT_SUCCESS);
 		default:
-			print_usage_mkeficapsule();
+			print_usage();
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -1164,7 +1190,7 @@ int main(int argc, char **argv)
 	    ((argc != optind + 1) ||
 	     ((capsule_type == CAPSULE_ACCEPT) && !guid) ||
 	     ((capsule_type == CAPSULE_REVERT) && guid)))) {
-		print_usage_mkeficapsule();
+		print_usage();
 		exit(EXIT_FAILURE);
 	}
 
