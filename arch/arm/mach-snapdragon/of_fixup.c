@@ -28,11 +28,6 @@
 #include <tee/optee.h>
 #include <time.h>
 
-/* U-Boot only supports USB high-speed mode on Qualcomm platforms with DWC3
- * USB controllers. Rather than requiring source level DT changes, we fix up
- * DT here. This improves compatibility with upstream DT and simplifies the
- * porting process for new devices.
- */
 static int fixup_qcom_dwc3(struct device_node *root, struct device_node *glue_np, bool flat)
 {
 	struct device_node *dwc3;
@@ -40,7 +35,7 @@ static int fixup_qcom_dwc3(struct device_node *root, struct device_node *glue_np
 	const __be32 *phandles;
 	const char *second_phy_name;
 
-	debug("Fixing up %s\n", glue_np->name);
+	debug("Checking USB configuration for %s\n", glue_np->name);
 
 	/* New DT flattens the glue and controller into a single node. */
 	if (flat) {
@@ -55,6 +50,43 @@ static int fixup_qcom_dwc3(struct device_node *root, struct device_node *glue_np
 		}
 	}
 
+	phandles = of_get_property(dwc3, "phys", &len);
+	len /= sizeof(*phandles);
+	if (len == 1) {
+		log_debug("Only one phy, not a superspeed controller\n");
+		goto apply_fixup;
+	}
+
+	/* Figure out if the superspeed phy is present */
+	ret = of_property_read_string_index(dwc3, "phy-names", 1, &second_phy_name);
+	if (ret == -ENODATA) {
+		log_debug("Only one phy, not a super-speed controller\n");
+		goto apply_fixup;
+	} else if (ret) {
+		log_err("Failed to read second phy name: %d\n", ret);
+		return ret;
+	}
+
+	/*
+	 * Skip the fixup for platforms with proper super-speed USB support
+	 * in U-Boot. Add the DWC3 glue compatible string to this list when
+	 * super-speed USB works on a new platform.
+	 */
+	static const char * const ss_capable[] = {
+		"qcom,sc7280-dwc3",
+		NULL
+	};
+	for (int i = 0; ss_capable[i]; i++) {
+		if (of_device_is_compatible(glue_np, ss_capable[i], NULL, NULL)) {
+			debug("Skipping USB fixup for %s\n", glue_np->name);
+			return 0;
+		}
+	}
+
+apply_fixup:
+	log_warning("Applying USB high-speed fixup to %s. If super-speed USB works on this platform, add the compatible to the skip list in %s\n",
+		    glue_np->name, __FILE__);
+
 	/* Tell the glue driver to configure the wrapper for high-speed only operation */
 	ret = of_write_prop(glue_np, "qcom,select-utmi-as-pipe-clk", 0, NULL);
 	if (ret) {
@@ -62,22 +94,11 @@ static int fixup_qcom_dwc3(struct device_node *root, struct device_node *glue_np
 		return ret;
 	}
 
-	phandles = of_get_property(dwc3, "phys", &len);
-	len /= sizeof(*phandles);
-	if (len == 1) {
-		log_debug("Only one phy, not a superspeed controller\n");
+	/*
+	 * Single-PHY controllers only need qcom,select-utmi-as-pipe-clk.
+	 */
+	if (len == 1)
 		return 0;
-	}
-
-	/* Figure out if the superspeed phy is present and if so then which phy is it? */
-	ret = of_property_read_string_index(dwc3, "phy-names", 1, &second_phy_name);
-	if (ret == -ENODATA) {
-		log_debug("Only one phy, not a super-speed controller\n");
-		return 0;
-	} else if (ret) {
-		log_err("Failed to read second phy name: %d\n", ret);
-		return ret;
-	}
 
 	/*
 	 * Determine which phy is the superspeed phy by checking the name of the second phy
@@ -105,7 +126,6 @@ static int fixup_qcom_dwc3(struct device_node *root, struct device_node *glue_np
 		log_err("Failed to set 'maximum-speed' property: %d\n", ret);
 		return ret;
 	}
-
 	return 0;
 }
 
