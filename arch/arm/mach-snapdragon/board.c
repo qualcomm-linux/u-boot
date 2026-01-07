@@ -709,6 +709,21 @@ static void carve_out_reserved_memory(void)
 	}
 }
 
+#ifdef CONFIG_EFI_LOADER
+/**
+ * efi_add_known_memory() - Add platform-specific reserved memory to EFI map
+ *
+ * This function is called by the EFI memory initialization code to allow
+ * platforms to add their reserved memory regions to the EFI memory map.
+ * For Qualcomm platforms, this delegates to qcom_add_reserved_memory_to_efi()
+ * which handles SoC-specific reserved memory regions.
+ */
+void efi_add_known_memory(void)
+{
+	qcom_add_reserved_memory_to_efi();
+}
+#endif /* CONFIG_EFI_LOADER */
+
 /* This function open-codes setup_all_pgtables() so that we can
  * insert additional mappings *before* turning on the MMU.
  */
