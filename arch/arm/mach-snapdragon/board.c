@@ -19,6 +19,7 @@
 #include <dm/uclass-internal.h>
 #include <dm/read.h>
 #include <power/regulator.h>
+#include <power/pmic.h>
 #include <env.h>
 #include <fdt_support.h>
 #include <init.h>
@@ -33,9 +34,32 @@
 #include <smem.h>
 #include <sort.h>
 #include <time.h>
+#include <command.h>
 
 #include "qcom_fit_multidtb.h"
 #include "qcom-priv.h"
+
+/* Reboot mode definitions */
+#define QCOM_REBOOT_MODE_FASTBOOT	0x2
+#define QCOM_REBOOT_MODE_MASK		0xFE
+
+/* PON (Power On) register addresses - Gen 4 PMICs */
+#define QCOM_PON_BASE_ADDR		0x800
+#define QCOM_PON_PERPH_SUBTYPE		(QCOM_PON_BASE_ADDR + 0x5)
+#define QCOM_PON_SOFT_RB_SPARE		(QCOM_PON_BASE_ADDR + 0x8F)
+
+/* PON register addresses - Newer PMICs (SDAM-based) */
+#define QCOM_PON_REBOOT_REASON_SDAM	0x7148
+
+/* PMIC Revision ID registers */
+#define QCOM_PMIC_REVID_BASE		0x0100
+#define QCOM_PMIC_METAL_REV		(QCOM_PMIC_REVID_BASE + 0x02)
+
+/* PMIC identification values */
+#define QCOM_PMIC_TYPE_QC		0x51
+#define QCOM_PMIC_SUBTYPE_GEN4		0x4
+#define QCOM_PMIC_MODEL_PM855		30
+#define QCOM_PMIC_MODEL_INVALID		0x00
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -498,6 +522,125 @@ static void configure_env(void)
 	qcom_set_serialno();
 }
 
+/**
+ * detect_pmic_model() - Detect PMIC model from revision ID registers
+ * @dev: PMIC device
+ *
+ * Reads the PMIC revision ID registers to identify the PMIC model.
+ * This is used to determine which register addresses to use for
+ * reading the reboot reason.
+ *
+ * Return: PMIC model number or QCOM_PMIC_MODEL_INVALID on error
+ */
+static int detect_pmic_model(struct udevice *dev)
+{
+	u8 rev_id[4] = {0};
+	int ret, i;
+	u8 pmic_model;
+
+	/* Read 4 bytes from PMIC REVID registers */
+	for (i = 0; i < 4; i++) {
+		ret = pmic_reg_read(dev, QCOM_PMIC_METAL_REV + i);
+		if (ret < 0) {
+			log_debug("Failed to read PMIC REVID reg 0x%X: %d\n",
+				  QCOM_PMIC_METAL_REV + i, ret);
+			return QCOM_PMIC_MODEL_INVALID;
+		}
+		rev_id[i] = (u8)ret;
+	}
+
+	/* Verify this is a Qualcomm PMIC device */
+	if (rev_id[2] != QCOM_PMIC_TYPE_QC) {
+		log_debug("Not a Qualcomm PMIC (type=0x%02X)\n",
+			  rev_id[2]);
+		return QCOM_PMIC_MODEL_INVALID;
+	}
+
+	pmic_model = rev_id[3];
+	log_debug("PMIC Model: 0x%02X (Metal=0x%02X, Layer=0x%02X)\n",
+		  pmic_model, rev_id[0], rev_id[1]);
+
+	return pmic_model;
+}
+
+/**
+ * check_fastboot_mode() - Check if device should enter fastboot mode
+ *
+ * Reads the PMIC PON (Power On) register to check if the reboot reason
+ * indicates that fastboot mode should be entered. The register address
+ * varies depending on the PMIC generation.
+ *
+ * For Gen 4 PMICs: Uses PON_SOFT_RB_SPARE register
+ * For newer PMICs: Uses SDAM-based PON_REBOOT_REASON register
+ *
+ * If fastboot mode is detected, clears the reboot reason and enters
+ * fastboot mode via the "run fastboot" command.
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+static int check_fastboot_mode(void)
+{
+	struct udevice *dev;
+	int ret, reboot_reason, reg_val;
+	u32 pon_reset_addr;
+	u8 peripheral_subtype;
+	int pmic_model;
+
+	if (!IS_ENABLED(CONFIG_DM_PMIC))
+		return 0;
+
+	ret = pmic_get("pmic@0", &dev);
+	if (ret)
+		return ret;
+
+	/* Detect PMIC model for address resolution */
+	pmic_model = detect_pmic_model(dev);
+	if (pmic_model == QCOM_PMIC_MODEL_INVALID)
+		return -1;
+
+	peripheral_subtype = pmic_reg_read(dev, QCOM_PON_PERPH_SUBTYPE);
+
+	/* Select register address based on PMIC generation */
+	if (peripheral_subtype == QCOM_PMIC_SUBTYPE_GEN4)
+		pon_reset_addr = QCOM_PON_SOFT_RB_SPARE;
+	else
+		pon_reset_addr = QCOM_PON_REBOOT_REASON_SDAM;
+
+	log_debug("PON reg: 0x%X (subtype=0x%X, model=0x%X)\n",
+		  pon_reset_addr, peripheral_subtype, pmic_model);
+
+	/* Read reboot reason */
+	reg_val = pmic_reg_read(dev, pon_reset_addr);
+	if (reg_val < 0) {
+		log_debug("Failed to read reboot reason: %d\n", reg_val);
+		return reg_val;
+	}
+
+	reboot_reason = (reg_val & QCOM_REBOOT_MODE_MASK) >> 1;
+	log_debug("Reboot reason: 0x%02X (raw=0x%02X)\n",
+		  reboot_reason, reg_val);
+
+	if (reboot_reason == QCOM_REBOOT_MODE_FASTBOOT) {
+		log_info("Fastboot mode detected, entering fastboot...\n");
+
+		/* Clear reboot reason */
+		reg_val &= (~QCOM_REBOOT_MODE_MASK);
+
+		if (pmic_model == QCOM_PMIC_MODEL_PM855)
+			pon_reset_addr = QCOM_PON_SOFT_RB_SPARE;
+
+		ret = pmic_reg_write(dev, pon_reset_addr, reg_val);
+		if (ret != 0)
+			log_warning("Failed to clear reboot reason (%d)\n",
+				    ret);
+
+		/* Enter fastboot mode */
+		ret = run_command("run fastboot", 0);
+	}
+
+	return ret;
+}
+
 void qcom_show_boot_source(void)
 {
 	const char *name = "UNKNOWN";
@@ -581,6 +724,9 @@ int board_late_init(void)
 	qcom_show_boot_source();
 	/* Configure the dfu_string for capsule updates */
 	qcom_configure_capsule_updates();
+
+	/* Check reboot reason for fastboot */
+	check_fastboot_mode();
 
 	/* Try FIT multi-DTB selection if enabled */
 	if (IS_ENABLED(CONFIG_QCOM_FIT_MULTIDTB)) {
