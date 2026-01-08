@@ -328,6 +328,20 @@ int part_get_info_by_uuid(struct blk_desc *desc, const char *uuid,
 			  struct disk_partition *info);
 
 /**
+ * part_get_info_by_type_guid() - Search for a partition by type GUID
+ *                                among all available registered partitions
+ *
+ * @desc:	block device descriptor
+ * @type_guid:	the specified partition type GUID
+ * @info:	the disk partition info
+ *
+ * Return: the partition number on match (starting on 1), -ENOENT on no match,
+ * otherwise error
+ */
+int part_get_info_by_type_guid(struct blk_desc *desc, const char *type_guid,
+			       struct disk_partition *info);
+
+/**
  * part_get_info_by_dev_and_name_or_num() - Get partition info from dev number
  *					    and part name, or dev number and
  *					    part number.
@@ -400,6 +414,13 @@ static inline int part_get_info_by_name(struct blk_desc *desc, const char *name,
 
 static inline int part_get_info_by_uuid(struct blk_desc *desc, const char *uuid,
 					struct disk_partition *info)
+{
+	return -ENOENT;
+}
+
+static inline int part_get_info_by_type_guid(struct blk_desc *desc,
+					     const char *type_guid,
+					     struct disk_partition *info)
 {
 	return -ENOENT;
 }
