@@ -31,14 +31,15 @@ int scsi_get_blk_by_uuid(const char *uuid,
 {
 	static int is_scsi_scanned;
 	struct blk_desc *blk;
-	int i, ret;
+	int i, ret, max;
 
 	if (!is_scsi_scanned) {
 		scsi_scan(false /* no verbose */);
 		is_scsi_scanned = 1;
 	}
 
-	for (i = 0; i < blk_find_max_devnum(UCLASS_SCSI) + 1; i++) {
+	max = blk_find_max_devnum(UCLASS_SCSI) + 1;
+	for (i = 0; i < max; i++) {
 		ret = blk_get_desc(UCLASS_SCSI, i, &blk);
 		if (ret)
 			continue;
@@ -50,7 +51,30 @@ int scsi_get_blk_by_uuid(const char *uuid,
 		}
 	}
 
-	return -1;
+	return -ENODEV;
+}
+
+int scsi_get_blk_by_type_guid(const char *type_guid,
+			      struct blk_desc **blk_desc_ptr,
+			      struct disk_partition *part_info_ptr)
+{
+	struct blk_desc *blk;
+	int i, ret, max;
+
+	max = blk_find_max_devnum(UCLASS_SCSI) + 1;
+	for (i = 0; i < max; i++) {
+		ret = blk_get_desc(UCLASS_SCSI, i, &blk);
+		if (ret)
+			continue;
+
+		ret = part_get_info_by_type_guid(blk, type_guid, part_info_ptr);
+		if (ret > 0) {
+			*blk_desc_ptr = blk;
+			return 0;
+		}
+	}
+
+	return -ENODEV;
 }
 
 int scsi_bus_reset(struct udevice *dev)
