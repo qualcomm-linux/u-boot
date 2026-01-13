@@ -19,8 +19,10 @@
 #include <dm/uclass-internal.h>
 #include <dm/read.h>
 #include <power/regulator.h>
+#include <efi_loader.h>
 #include <env.h>
 #include <fdt_support.h>
+#include <fdtdec.h>
 #include <init.h>
 #include <linux/arm-smccc.h>
 #include <linux/bug.h>
@@ -705,6 +707,62 @@ static void carve_out_reserved_memory(void)
 		} else {
 			/* Bump size if this region is immediately after the previous one */
 			size = ALIGN(res[i].end - start, SZ_2M);
+		}
+	}
+}
+
+/**
+ * efi_add_known_memory() - Add platform-specific reserved memory to EFI map
+ *
+ * This function is called by the EFI memory initialization code to allow
+ * platforms to add their reserved memory regions to the EFI memory map.
+ * For Qualcomm platforms, this parses the reserved-memory nodes from the
+ * device tree and adds them to the EFI memory map.
+ */
+void efi_add_known_memory(void)
+{
+	ofnode parent, node;
+	fdt_addr_t addr;
+	fdt_size_t size;
+	const char *name;
+
+	if (!IS_ENABLED(CONFIG_EFI_LOADER))
+		return;
+
+	/* Parse reserved-memory nodes from device tree */
+	parent = ofnode_path("/reserved-memory");
+	if (!ofnode_valid(parent)) {
+		log_debug("No reserved-memory node found in device tree\n");
+		return;
+	}
+
+	log_debug("Adding reserved-memory regions to EFI memory map\n");
+
+	ofnode_for_each_subnode(node, parent) {
+		if (!ofnode_is_enabled(node))
+			continue;
+
+		addr = ofnode_get_addr_size_index(node, 0, &size);
+		if (addr != FDT_ADDR_T_NONE) {
+			efi_status_t ret;
+
+			name = ofnode_get_name(node);
+			ret = efi_add_memory_map(addr, size,
+						 EFI_RESERVED_MEMORY_TYPE);
+
+			if (ret != EFI_SUCCESS) {
+				log_err("Failed to reserve %s (0x%llx-0x%llx): %lu\n",
+					name ? name : "unknown",
+					(unsigned long long)addr,
+					(unsigned long long)(addr + size - 1),
+					ret & ~EFI_ERROR_MASK);
+			} else {
+				log_debug("Reserved %s: 0x%llx-0x%llx (%llu KB)\n",
+					  name ? name : "unknown",
+					  (unsigned long long)addr,
+					  (unsigned long long)(addr + size - 1),
+					  (unsigned long long)(size / 1024));
+			}
 		}
 	}
 }

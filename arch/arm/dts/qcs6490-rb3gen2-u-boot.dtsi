@@ -15,6 +15,32 @@
 		      <0 0xC3400000 0 0x3CC00000>,
 		      <1 0x00000000 1 0x00000000>;
 	};
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		axon_dma_mem: axon-dma@80600000 {
+			reg = <0x0 0x80600000 0x0 0x100000>;
+			no-map;
+		};
+
+		xbl_dt_mem: xbl-dt@80894000 {
+			reg = <0x0 0x80894000 0x0 0x40000>;
+			no-map;
+		};
+
+		pil_reserved_mem: pil-reserved@84300000 {
+			reg = <0x0 0x84300000 0x0 0x16b00000>;
+			no-map;
+		};
+
+		display_mem: display@e1000000 {
+			reg = <0x0 0xe1000000 0x0 0x2400000>;
+			no-map;
+		};
+	};
 };
 
 &usb_1 {
