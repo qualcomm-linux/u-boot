@@ -106,6 +106,17 @@ config EFI_HAVE_RUNTIME_RESET
 	depends on ARCH_BCM283X || FSL_LAYERSCAPE || PSCI_RESET || \
 		   SANDBOX || SYSRESET_SBI || SYSRESET_X86
 
+config EFI_PSCI_RESET_RUNTIME
+	bool "EFI Runtime PSCI Reset Support"
+	default y if EFI_LOADER && PSCI_RESET
+	depends on ARM_PSCI_FW
+	help
+	  Enable PSCI-based reset implementation for EFI runtime services.
+	  This allows the EFI runtime to perform system resets and power-off
+	  operations using the ARM Power State Coordination Interface (PSCI)
+	  firmware interface, providing a standardized method for system
+	  power management across different ARM platforms.
+
 endmenu
 
 menu "UEFI Variables"
