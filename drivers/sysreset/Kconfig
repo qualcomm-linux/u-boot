@@ -49,6 +49,14 @@ config SYSRESET_CMD_RESET
 	help
 	  Enable sysreset implementation of the reset command.
 
+config SYSRESET_CMD_RESET_ARGS
+	bool "Enable reset command to take arguments"
+	help
+	  Pass on the arguments received by the 'reset' command to the
+	  sysreset driver(s). The sysreset driver(s) may make use of the
+	  additional arguments for implementing arch/board specific
+	  functionality.
+
 if CMD_POWEROFF
 
 config SYSRESET_CMD_POWEROFF
