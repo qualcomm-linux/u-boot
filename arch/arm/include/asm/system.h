@@ -342,6 +342,7 @@ void smc_call(struct pt_regs *args);
 void __noreturn psci_system_reset(void);
 void __noreturn psci_system_reset2(u32 reset_level, u32 cookie);
 void __noreturn psci_system_off(void);
+int psci_features(u32 psci_func_id);
 
 #ifdef CONFIG_ARMV8_PSCI
 extern char __secure_start[];
