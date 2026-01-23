@@ -34,6 +34,7 @@
 #include <sort.h>
 #include <time.h>
 
+#include "qcom_fit_multidtb.h"
 #include "qcom-priv.h"
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -580,6 +581,12 @@ int board_late_init(void)
 	qcom_show_boot_source();
 	/* Configure the dfu_string for capsule updates */
 	qcom_configure_capsule_updates();
+
+	/* Try FIT multi-DTB selection if enabled */
+	if (IS_ENABLED(CONFIG_QCOM_FIT_MULTIDTB)) {
+		if (qcom_fit_multidtb_setup() != 0)
+			log_debug("FIT multi-DTB selection not available or failed\n");
+	}
 
 	return 0;
 }
