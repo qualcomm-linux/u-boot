@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <tee/optee.h>
 #include <time.h>
+#include "qcom_fixup_handlers.h"
 
 /* U-Boot only supports USB high-speed mode on Qualcomm platforms with DWC3
  * USB controllers. Rather than requiring source level DT changes, we fix up
@@ -218,7 +219,120 @@ static int qcom_of_fixup_nodes(void * __maybe_unused ctx, struct event *event)
 
 EVENT_SPY_FULL(EVT_OF_LIVE_BUILT, qcom_of_fixup_nodes);
 
+/**
+ * soc_specific_fixups() - Apply SoC-specific device tree fixups
+ * @fdt: Pointer to the device tree
+ *
+ * This function applies SoC-specific fixups based on the device tree
+ * compatible string. Each SoC can have its own fixup logic.
+ */
+static void soc_specific_fixups(struct fdt_header *fdt)
+{
+	int ret;
+
+	/* QCS615-specific fixup: Disable MMC node */
+	if (fdt_node_check_compatible(fdt, 0, "qcom,qcs615") == 0) {
+		int path_offset;
+		char prop_val[] = "disabled";
+
+		path_offset = fdt_path_offset(fdt, "/soc@0/mmc@7c4000");
+		if (path_offset >= 0) {
+			ret = fixup_dt_node(fdt, path_offset, "status",
+					    (void *)prop_val, SET_PROP_STRING);
+			if (ret)
+				log_err("Failed to disable MMC node for QCS615: %d\n", ret);
+		}
+	}
+}
+
 int ft_board_setup(void __maybe_unused *blob, struct bd_info __maybe_unused *bd)
 {
+	struct fdt_header *fdt = blob;
+
+	/* Apply SoC-specific fixups */
+	soc_specific_fixups(fdt);
+
+	/* Call all common fixup handlers */
+	boardinfo_fixup_handler(fdt);
+	ddrinfo_fixup_handler(fdt);
+	subsetparts_fixup_handler(fdt);
+
 	return 0;
+}
+
+int fixup_dt_node(void *fdt_ptr, int node_offset,
+		  const char *property_name,
+		  void *property_value,
+		  enum fdt_fixup_type type)
+{
+	int ret;
+
+	if ((!fdt_ptr || node_offset < 0) ||
+	    (!property_value && type != ADD_SUBNODE))
+		return -1;
+
+	switch (type) {
+	case APPEND_PROP_U32:
+		fdt_set_totalsize(fdt_ptr,
+				  (fdt_totalsize(fdt_ptr)
+				  + sizeof(struct fdt_property)
+				  + strlen(property_name) + 3
+				  + sizeof(u32)));
+		ret = fdt_appendprop_u32(fdt_ptr, node_offset,
+					 property_name,
+					 *(u32 *)property_value);
+		break;
+	case APPEND_PROP_U64:
+		fdt_set_totalsize(fdt_ptr,
+				  (fdt_totalsize(fdt_ptr)
+				  + sizeof(struct fdt_property)
+				  + strlen(property_name) + 3
+				  + sizeof(u64)));
+		ret = fdt_appendprop_u64(fdt_ptr, node_offset,
+					 property_name,
+					 *(u64 *)property_value);
+		break;
+	case SET_PROP_U32:
+		fdt_set_totalsize(fdt_ptr,
+				  (fdt_totalsize(fdt_ptr)
+				  + sizeof(struct fdt_property)
+				  + strlen(property_name) + 3
+				  + sizeof(u32)));
+		ret = fdt_setprop_u32(fdt_ptr, node_offset,
+				      property_name,
+				      *(u32 *)property_value);
+		break;
+	case SET_PROP_U64:
+		fdt_set_totalsize(fdt_ptr,
+				  (fdt_totalsize(fdt_ptr)
+				  + sizeof(struct fdt_property)
+				  + strlen(property_name) + 3
+				  + sizeof(u64)));
+		ret = fdt_setprop_u64(fdt_ptr, node_offset,
+				      property_name,
+				      *(u64 *)property_value);
+		break;
+	case SET_PROP_STRING:
+		fdt_set_totalsize(fdt_ptr,
+				  (fdt_totalsize(fdt_ptr)
+				  + sizeof(struct fdt_property)
+				  + strlen(property_name) + 3
+				  + strlen((char *)property_value)));
+		ret = fdt_setprop_string(fdt_ptr, node_offset,
+					 property_name,
+					 (char *)property_value);
+		break;
+	case ADD_SUBNODE:
+		fdt_set_totalsize(fdt_ptr,
+				  (fdt_totalsize(fdt_ptr)
+				  + sizeof(struct fdt_property)
+				  + strlen(property_name) + 3));
+		ret = fdt_add_subnode(fdt_ptr, node_offset,
+				      property_name);
+		break;
+	default:
+		ret = -1;
+	}
+
+	return ret;
 }
