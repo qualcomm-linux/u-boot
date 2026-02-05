@@ -575,7 +575,7 @@ static int sc7280_get_function_mux(__maybe_unused unsigned int pin, unsigned int
 		return -EINVAL;
 
 	func = sc7280_pin_functions + pin;
-	for (i = 0; i < ARRAY_SIZE(msm_pin_function); i++)
+	for (i = 0; i < ARRAY_SIZE(*func); i++)
 		if ((*func)[i] == selector)
 			return i;
 
