@@ -45,4 +45,22 @@ config SYS_CONFIG_NAME
 	  Based on this option include/configs/<CONFIG_SYS_CONFIG_NAME>.h header
 	  will be used for board configuration.
 
+config QCOM_FIT_MULTIDTB
+	bool "Enable FIT multi-DTB selection for Qualcomm platforms"
+	depends on FIT
+	help
+	  Enable FIT multi-DTB selection for Qualcomm platforms.
+	  This allows U-Boot to select the appropriate device tree
+	  from a FIT image based on board parameters like SoC ID,
+	  platform ID, variant ID, OEM variant ID, foundry ID, etc.
+
+config QCOM_IMEM_SIZE
+	hex "QCOM IMEM size"
+	default 0x0
+	help
+	  Platform-specific IMEM size for calculating shared IMEM base address.
+	  Set to 0x2B000 (172KB) for most platforms or 0x59000 (356KB) for
+	  LeMans/Monaco. If not set (0x0), boot device detection will return
+	  default UFS type.
+
 endif

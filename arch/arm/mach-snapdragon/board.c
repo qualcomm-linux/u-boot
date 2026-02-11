@@ -19,6 +19,7 @@
 #include <dm/uclass-internal.h>
 #include <dm/read.h>
 #include <power/regulator.h>
+#include <power/pmic.h>
 #include <env.h>
 #include <fdt_support.h>
 #include <init.h>
@@ -30,14 +31,46 @@
 #include <malloc.h>
 #include <fdt_support.h>
 #include <usb.h>
+#include <smem.h>
 #include <sort.h>
 #include <time.h>
+#include <command.h>
 
+#include "qcom_fit_multidtb.h"
 #include "qcom-priv.h"
+
+/* Reboot mode definitions */
+#define QCOM_REBOOT_MODE_FASTBOOT	0x2
+#define QCOM_REBOOT_MODE_MASK		0xFE
+
+/* PON (Power On) register addresses - Gen 4 PMICs */
+#define QCOM_PON_BASE_ADDR		0x800
+#define QCOM_PON_PERPH_SUBTYPE		(QCOM_PON_BASE_ADDR + 0x5)
+#define QCOM_PON_SOFT_RB_SPARE		(QCOM_PON_BASE_ADDR + 0x8F)
+
+/* PON register addresses - Newer PMICs (SDAM-based) */
+#define QCOM_PON_REBOOT_REASON_SDAM	0x7148
+
+/* PMIC Revision ID registers */
+#define QCOM_PMIC_REVID_BASE		0x0100
+#define QCOM_PMIC_METAL_REV		(QCOM_PMIC_REVID_BASE + 0x02)
+
+/* PMIC identification values */
+#define QCOM_PMIC_TYPE_QC		0x51
+#define QCOM_PMIC_SUBTYPE_GEN4		0x4
+#define QCOM_PMIC_MODEL_PM855		30
+#define QCOM_PMIC_MODEL_INVALID		0x00
 
 DECLARE_GLOBAL_DATA_PTR;
 
 enum qcom_boot_source qcom_boot_source __section(".data") = 0;
+
+/* SMEM cache structure */
+static struct {
+	struct udevice *smem_dev;
+	struct socinfo *soc_info;
+	struct usable_ram_partition_table *ram_partition_table;
+} smem_cache;
 
 static struct mm_region rbx_mem_map[CONFIG_NR_DRAM_BANKS + 2] = { { 0 } };
 
@@ -489,6 +522,125 @@ static void configure_env(void)
 	qcom_set_serialno();
 }
 
+/**
+ * detect_pmic_model() - Detect PMIC model from revision ID registers
+ * @dev: PMIC device
+ *
+ * Reads the PMIC revision ID registers to identify the PMIC model.
+ * This is used to determine which register addresses to use for
+ * reading the reboot reason.
+ *
+ * Return: PMIC model number or QCOM_PMIC_MODEL_INVALID on error
+ */
+static int detect_pmic_model(struct udevice *dev)
+{
+	u8 rev_id[4] = {0};
+	int ret, i;
+	u8 pmic_model;
+
+	/* Read 4 bytes from PMIC REVID registers */
+	for (i = 0; i < 4; i++) {
+		ret = pmic_reg_read(dev, QCOM_PMIC_METAL_REV + i);
+		if (ret < 0) {
+			log_debug("Failed to read PMIC REVID reg 0x%X: %d\n",
+				  QCOM_PMIC_METAL_REV + i, ret);
+			return QCOM_PMIC_MODEL_INVALID;
+		}
+		rev_id[i] = (u8)ret;
+	}
+
+	/* Verify this is a Qualcomm PMIC device */
+	if (rev_id[2] != QCOM_PMIC_TYPE_QC) {
+		log_debug("Not a Qualcomm PMIC (type=0x%02X)\n",
+			  rev_id[2]);
+		return QCOM_PMIC_MODEL_INVALID;
+	}
+
+	pmic_model = rev_id[3];
+	log_debug("PMIC Model: 0x%02X (Metal=0x%02X, Layer=0x%02X)\n",
+		  pmic_model, rev_id[0], rev_id[1]);
+
+	return pmic_model;
+}
+
+/**
+ * check_fastboot_mode() - Check if device should enter fastboot mode
+ *
+ * Reads the PMIC PON (Power On) register to check if the reboot reason
+ * indicates that fastboot mode should be entered. The register address
+ * varies depending on the PMIC generation.
+ *
+ * For Gen 4 PMICs: Uses PON_SOFT_RB_SPARE register
+ * For newer PMICs: Uses SDAM-based PON_REBOOT_REASON register
+ *
+ * If fastboot mode is detected, clears the reboot reason and enters
+ * fastboot mode via the "run fastboot" command.
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+static int check_fastboot_mode(void)
+{
+	struct udevice *dev;
+	int ret, reboot_reason, reg_val;
+	u32 pon_reset_addr;
+	u8 peripheral_subtype;
+	int pmic_model;
+
+	if (!IS_ENABLED(CONFIG_DM_PMIC))
+		return 0;
+
+	ret = pmic_get("pmic@0", &dev);
+	if (ret)
+		return ret;
+
+	/* Detect PMIC model for address resolution */
+	pmic_model = detect_pmic_model(dev);
+	if (pmic_model == QCOM_PMIC_MODEL_INVALID)
+		return -1;
+
+	peripheral_subtype = pmic_reg_read(dev, QCOM_PON_PERPH_SUBTYPE);
+
+	/* Select register address based on PMIC generation */
+	if (peripheral_subtype == QCOM_PMIC_SUBTYPE_GEN4)
+		pon_reset_addr = QCOM_PON_SOFT_RB_SPARE;
+	else
+		pon_reset_addr = QCOM_PON_REBOOT_REASON_SDAM;
+
+	log_debug("PON reg: 0x%X (subtype=0x%X, model=0x%X)\n",
+		  pon_reset_addr, peripheral_subtype, pmic_model);
+
+	/* Read reboot reason */
+	reg_val = pmic_reg_read(dev, pon_reset_addr);
+	if (reg_val < 0) {
+		log_debug("Failed to read reboot reason: %d\n", reg_val);
+		return reg_val;
+	}
+
+	reboot_reason = (reg_val & QCOM_REBOOT_MODE_MASK) >> 1;
+	log_debug("Reboot reason: 0x%02X (raw=0x%02X)\n",
+		  reboot_reason, reg_val);
+
+	if (reboot_reason == QCOM_REBOOT_MODE_FASTBOOT) {
+		log_info("Fastboot mode detected, entering fastboot...\n");
+
+		/* Clear reboot reason */
+		reg_val &= (~QCOM_REBOOT_MODE_MASK);
+
+		if (pmic_model == QCOM_PMIC_MODEL_PM855)
+			pon_reset_addr = QCOM_PON_SOFT_RB_SPARE;
+
+		ret = pmic_reg_write(dev, pon_reset_addr, reg_val);
+		if (ret != 0)
+			log_warning("Failed to clear reboot reason (%d)\n",
+				    ret);
+
+		/* Enter fastboot mode */
+		ret = run_command("run fastboot", 0);
+	}
+
+	return ret;
+}
+
 void qcom_show_boot_source(void)
 {
 	const char *name = "UNKNOWN";
@@ -572,6 +724,15 @@ int board_late_init(void)
 	qcom_show_boot_source();
 	/* Configure the dfu_string for capsule updates */
 	qcom_configure_capsule_updates();
+
+	/* Check reboot reason for fastboot */
+	check_fastboot_mode();
+
+	/* Try FIT multi-DTB selection if enabled */
+	if (IS_ENABLED(CONFIG_QCOM_FIT_MULTIDTB)) {
+		if (qcom_fit_multidtb_setup() != 0)
+			log_debug("FIT multi-DTB selection not available or failed\n");
+	}
 
 	return 0;
 }
@@ -709,6 +870,21 @@ static void carve_out_reserved_memory(void)
 	}
 }
 
+#ifdef CONFIG_EFI_LOADER
+/**
+ * efi_add_known_memory() - Add platform-specific reserved memory to EFI map
+ *
+ * This function is called by the EFI memory initialization code to allow
+ * platforms to add their reserved memory regions to the EFI memory map.
+ * For Qualcomm platforms, this delegates to qcom_add_reserved_memory_to_efi()
+ * which handles SoC-specific reserved memory regions.
+ */
+void efi_add_known_memory(void)
+{
+	qcom_add_reserved_memory_to_efi();
+}
+#endif /* CONFIG_EFI_LOADER */
+
 /* This function open-codes setup_all_pgtables() so that we can
  * insert additional mappings *before* turning on the MMU.
  */
@@ -748,4 +924,96 @@ void enable_caches(void)
 		debug("carveout time: %lums\n", get_timer(carveout_start));
 	}
 	dcache_enable();
+}
+
+/**
+ * qcom_get_smem_device() - Get cached SMEM device
+ *
+ * This function provides cached access to the SMEM device.
+ * On first call, it initializes the SMEM device.
+ * Subsequent calls return the cached pointer.
+ *
+ * Return: Pointer to SMEM device on success, NULL on failure
+ */
+struct udevice *qcom_get_smem_device(void)
+{
+	/* Return cached value if already initialized */
+	if (smem_cache.smem_dev)
+		return smem_cache.smem_dev;
+
+	/* Get SMEM device */
+	if (uclass_get_device(UCLASS_SMEM, 0, &smem_cache.smem_dev)) {
+		log_err("Failed to get SMEM device\n");
+		return NULL;
+	}
+
+	return smem_cache.smem_dev;
+}
+
+/**
+ * qcom_get_socinfo() - Get cached socinfo from SMEM
+ *
+ * This function provides cached access to the socinfo structure from SMEM.
+ * On first call, it initializes the SMEM device and retrieves the socinfo.
+ * Subsequent calls return the cached pointer.
+ *
+ * Return: Pointer to socinfo structure on success, NULL on failure
+ */
+struct socinfo *qcom_get_socinfo(void)
+{
+	size_t size;
+	struct udevice *dev;
+
+	/* Return cached value if already initialized */
+	if (smem_cache.soc_info)
+		return smem_cache.soc_info;
+
+	/* Get SMEM device */
+	dev = qcom_get_smem_device();
+	if (!dev)
+		return NULL;
+
+	/* Get socinfo from SMEM */
+	smem_cache.soc_info = smem_get(dev, 0, SMEM_HW_SW_BUILD_ID, &size);
+	if (!smem_cache.soc_info) {
+		log_err("Failed to get socinfo from SMEM\n");
+		return NULL;
+	}
+
+	return smem_cache.soc_info;
+}
+
+/**
+ * qcom_get_ram_partitions() - Get cached RAM partition table from SMEM
+ *
+ * This function provides cached access to the RAM partition table from SMEM.
+ * On first call, it retrieves the partition table from SMEM.
+ * Subsequent calls return the cached pointer.
+ *
+ * Return: Pointer to RAM partition table on success, NULL on failure
+ */
+struct usable_ram_partition_table *qcom_get_ram_partitions(void)
+{
+	size_t size;
+	struct udevice *dev;
+
+	/* Return cached value if already initialized */
+	if (smem_cache.ram_partition_table)
+		return smem_cache.ram_partition_table;
+
+	/* Get SMEM device */
+	dev = qcom_get_smem_device();
+	if (!dev)
+		return NULL;
+
+	/* Get RAM partition table from SMEM */
+	smem_cache.ram_partition_table = smem_get(dev, 0,
+						  SMEM_USABLE_RAM_PARTITION_TABLE,
+						  &size);
+	if (!smem_cache.ram_partition_table) {
+		log_err("Failed to get RAM partition table from SMEM\n");
+		return NULL;
+	}
+
+	return smem_cache.ram_partition_table;
 }
