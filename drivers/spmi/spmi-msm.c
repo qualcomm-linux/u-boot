@@ -59,6 +59,8 @@
 #define SPMI_MAX_SLAVES 16
 #define SPMI_MAX_PERIPH 256
 
+#define SDAM02_REBOOT_MODE_PID 0x71
+
 #define SPMI_CHANNEL_READ_ONLY	BIT(31)
 #define SPMI_CHANNEL_VALID	BIT(30)
 #define SPMI_CHANNEL_MASK	0xffff
@@ -117,8 +119,11 @@ static int msm_spmi_write(struct udevice *dev, int usid, int pid, int off,
 		return -EIO;
 	if (!(priv->channel_map[usid][pid] & SPMI_CHANNEL_VALID))
 		return -EINVAL;
-	if (priv->channel_map[usid][pid] & SPMI_CHANNEL_READ_ONLY)
-		return -EPERM;
+	/* Skip readonly check for SDAM02 reboot reason pid */
+	if (priv->channel_map[usid][pid] & SPMI_CHANNEL_READ_ONLY) {
+		if (!(usid == 0 && pid == SDAM02_REBOOT_MODE_PID))
+			return -EPERM;
+	}
 
 	channel = priv->channel_map[usid][pid] & SPMI_CHANNEL_MASK;
 
