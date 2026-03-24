@@ -102,8 +102,7 @@ config EFI_SET_TIME
 	  can be used by an EFI application to adjust the real time clock.
 
 config EFI_HAVE_RUNTIME_RESET
-	# bool "Reset runtime service is available"
-	bool
+	bool "Reset runtime service"
 	default y
 	depends on ARCH_BCM283X || FSL_LAYERSCAPE || PSCI_RESET || \
 		   SANDBOX || SYSRESET_SBI || SYSRESET_X86
