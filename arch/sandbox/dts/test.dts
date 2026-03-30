@@ -961,6 +961,11 @@
 				sandbox,filename = "i2c.bin";
 				sandbox,size = <256>;
 			};
+			emul_nvmem_test: emul-nvmem-test {
+				compatible = "sandbox,i2c-eeprom";
+				sandbox,filename = "nvmem-test.bin";
+				sandbox,size = <256>;
+			};
 			emul0: emul0 {
 				compatible = "sandbox,i2c-rtc-emul";
 			};
@@ -977,6 +982,13 @@
 		mc34708: pmic@41 {
 			reg = <0x41>;
 			sandbox,emul = <&emul_pmic1>;
+		};
+
+		/* Mock NVMEM device for bit field testing */
+		nvmem-test@50 {
+			reg = <0x50>;
+			compatible = "i2c-eeprom";
+			sandbox,emul = <&emul_nvmem_test>;
 		};
 	};
 
