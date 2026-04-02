@@ -19,7 +19,7 @@ Installation
 First, setup ``CROSS_COMPILE`` for aarch64. Then, build U-Boot for ``QCS615``, ``QCS8300`` or ``QCS9100``::
 
   $ export CROSS_COMPILE=<aarch64 toolchain prefix>
-  $ make qcom_qcs8300_defconfig
+  $ make qcom_qcs9100_defconfig
   $ make -j8 u-boot.mbn
 
 Although the board does not have secure boot set up by default,
