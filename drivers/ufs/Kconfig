@@ -55,6 +55,14 @@ config UFS_QCOM
 	  This selects the platform driver for the UFS host
 	  controller present on Qualcomm Snapdragon SoCs.
 
+config SPL_UFS_QCOM
+	bool "Qualcomm Host Controller driver for UFS in SPL"
+	depends on SPL_UFS && ARCH_SNAPDRAGON
+	help
+	  This selects the platform driver for the UFS host controller
+	  present on Qualcomm Snapdragon SoCs for use in SPL. Enable this
+	  to use UFS as a boot device in SPL on Qualcomm platforms.
+
 config UFS_RENESAS
 	bool "Renesas R-Car S4 UFS Controller support"
 	depends on UFS
