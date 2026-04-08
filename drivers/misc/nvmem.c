@@ -12,55 +12,163 @@
 #include <dm/ofnode.h>
 #include <dm/read.h>
 #include <dm/uclass.h>
+#include <linux/bitops.h>
+#include <linux/kernel.h>
+#include <asm/byteorder.h>
 
-int nvmem_cell_read(struct nvmem_cell *cell, void *buf, size_t size)
+/* Maximum supported NVMEM cell size */
+#define MAX_NVMEM_CELL_SIZE sizeof(u32)  /* 4 bytes */
+
+/**
+ * nvmem_cell_read_raw() - Read raw bytes from NVMEM cell without bit field extraction
+ * @cell: NVMEM cell to read from
+ * @buf: Buffer to store read data
+ * @size: Size of buffer
+ *
+ * This is an internal helper that reads raw bytes from hardware without applying
+ * bit field extraction. Used by both nvmem_cell_read() and nvmem_cell_write().
+ * Caller must validate buffer size before calling this function.
+ *
+ * Return: Number of bytes read on success, negative error code on failure
+ */
+static int nvmem_cell_read_raw(struct nvmem_cell *cell, void *buf, size_t size)
 {
-	dev_dbg(cell->nvmem, "%s: off=%u size=%zu\n", __func__, cell->offset, size);
-	if (size != cell->size)
-		return -EINVAL;
+	int ret;
+
+	memset(buf, 0, size);
 
 	switch (cell->nvmem->driver->id) {
 	case UCLASS_I2C_EEPROM:
-		return i2c_eeprom_read(cell->nvmem, cell->offset, buf, size);
-	case UCLASS_MISC: {
-		int ret = misc_read(cell->nvmem, cell->offset, buf, size);
-
+		ret = i2c_eeprom_read(cell->nvmem, cell->offset, buf, cell->size);
+		break;
+	case UCLASS_MISC:
+		ret = misc_read(cell->nvmem, cell->offset, buf, cell->size);
 		if (ret < 0)
 			return ret;
-		if (ret != size)
+		if (ret != cell->size)
 			return -EIO;
-		return 0;
-	}
+		ret = 0;
+		break;
 	case UCLASS_RTC:
-		return dm_rtc_read(cell->nvmem, cell->offset, buf, size);
+		ret = dm_rtc_read(cell->nvmem, cell->offset, buf, cell->size);
+		break;
 	default:
 		return -ENOSYS;
 	}
+
+	if (ret)
+		return ret;
+
+	return cell->size;
+}
+
+int nvmem_cell_read(struct nvmem_cell *cell, void *buf, size_t size)
+{
+	int ret, bytes_needed;
+	u32 value;
+
+	dev_dbg(cell->nvmem, "%s: off=%u size=%zu\n", __func__, cell->offset, size);
+
+	if (cell->nbits) {
+		if (size != MAX_NVMEM_CELL_SIZE) {
+			dev_dbg(cell->nvmem, "bit field requires buffer size %d, got %zu\n",
+				MAX_NVMEM_CELL_SIZE, size);
+			return -EINVAL;
+		}
+
+		bytes_needed = DIV_ROUND_UP(cell->nbits + cell->bit_offset, BITS_PER_BYTE);
+		if (bytes_needed > cell->size || bytes_needed > MAX_NVMEM_CELL_SIZE) {
+			dev_dbg(cell->nvmem, "bit field requires %d bytes, cell size %zu\n",
+				bytes_needed, cell->size);
+			return -EINVAL;
+		}
+	} else {
+		if (size != cell->size) {
+			dev_dbg(cell->nvmem, "buffer size %zu must match cell size %zu\n",
+				size, cell->size);
+			return -EINVAL;
+		}
+	}
+
+	ret = nvmem_cell_read_raw(cell, buf, size);
+	if (ret < 0)
+		return ret;
+
+	if (cell->nbits) {
+		value = le32_to_cpu(*((__le32 *)buf));
+		value >>= cell->bit_offset;
+		value &= GENMASK(cell->nbits - 1, 0);
+		*(u32 *)buf = value;
+	}
+
+	return 0;
 }
 
 int nvmem_cell_write(struct nvmem_cell *cell, const void *buf, size_t size)
 {
+	int ret, bytes_needed;
+	u32 current, value, mask;
+
 	dev_dbg(cell->nvmem, "%s: off=%u size=%zu\n", __func__, cell->offset, size);
-	if (size != cell->size)
-		return -EINVAL;
+
+	if (cell->nbits) {
+		if (size != MAX_NVMEM_CELL_SIZE) {
+			dev_dbg(cell->nvmem, "bit field requires buffer size %d, got %zu\n",
+				MAX_NVMEM_CELL_SIZE, size);
+			return -EINVAL;
+		}
+
+		bytes_needed = DIV_ROUND_UP(cell->nbits + cell->bit_offset, BITS_PER_BYTE);
+		if (bytes_needed > cell->size || bytes_needed > MAX_NVMEM_CELL_SIZE) {
+			dev_dbg(cell->nvmem, "bit field requires %d bytes, cell size %zu\n",
+				bytes_needed, cell->size);
+			return -EINVAL;
+		}
+
+		ret = nvmem_cell_read_raw(cell, &current, sizeof(current));
+		if (ret < 0)
+			return ret;
+
+		current = le32_to_cpu(*((__le32 *)&current));
+		value = *(const u32 *)buf;
+		value &= GENMASK(cell->nbits - 1, 0);
+		value <<= cell->bit_offset;
+
+		mask = GENMASK(cell->nbits - 1, 0) << cell->bit_offset;
+
+		current = (current & ~mask) | value;
+		buf = &current;
+	} else {
+		if (size != cell->size) {
+			dev_dbg(cell->nvmem, "buffer size %zu must match cell size %zu\n",
+				size, cell->size);
+			return -EINVAL;
+		}
+	}
 
 	switch (cell->nvmem->driver->id) {
 	case UCLASS_I2C_EEPROM:
-		return i2c_eeprom_write(cell->nvmem, cell->offset, buf, size);
-	case UCLASS_MISC: {
-		int ret = misc_write(cell->nvmem, cell->offset, buf, size);
-
+		ret = i2c_eeprom_write(cell->nvmem, cell->offset, buf, cell->size);
+		break;
+	case UCLASS_MISC:
+		ret = misc_write(cell->nvmem, cell->offset, buf, cell->size);
 		if (ret < 0)
 			return ret;
-		if (ret != size)
+		if (ret != cell->size)
 			return -EIO;
-		return 0;
-	}
+		ret = 0;
+		break;
 	case UCLASS_RTC:
-		return dm_rtc_write(cell->nvmem, cell->offset, buf, size);
+		ret = dm_rtc_write(cell->nvmem, cell->offset, buf, cell->size);
+		break;
 	default:
 		return -ENOSYS;
 	}
+
+	if (ret)
+		return ret;
+
+	return 0;
 }
 
 /**
@@ -128,6 +236,20 @@ int nvmem_cell_get_by_index(struct udevice *dev, int index,
 
 	cell->offset = offset;
 	cell->size = size;
+
+	ret = ofnode_read_u32_index(args.node, "bits", 0, &cell->bit_offset);
+	if (ret) {
+		cell->bit_offset = 0;
+		cell->nbits = 0;
+	} else {
+		ret = ofnode_read_u32_index(args.node, "bits", 1, &cell->nbits);
+		if (ret)
+			return -EINVAL;
+
+		if (cell->bit_offset + cell->nbits > cell->size * 8)
+			return -EINVAL;
+	}
+
 	return 0;
 }
 
