@@ -11,4 +11,30 @@
 		      <0x0 0xc0000000 0x0 0xc0000000>,
 		      <0x1 0x80000000 0x1 0x00000000>;
 	};
+
+	reboot-mode {
+		compatible = "nvmem-reboot-mode";
+		nvmem-cells = <&reboot_reason>;
+		nvmem-cell-names = "reboot-mode";
+
+		mode-bootloader = <0x02>;
+		mode-recovery   = <0x01>;
+	};
+};
+
+&pm8150_0 {
+	/* Virtual NVMEM node for PON-based reboot reason storage */
+	nvram@800 {
+		compatible = "qcom,spmi-sdam";
+		reg = <0x800>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x00 0x800 0x100>;
+
+		/* Reboot reason cell at PON_SOFT_RB_SPARE (0x88F) */
+		reboot_reason: reboot-reason@8f {
+			reg = <0x8f 0x1>;
+			bits = <1 7>;
+		};
+	};
 };
