@@ -26,11 +26,15 @@
  * @nvmem: The backing storage device
  * @offset: The offset of the cell from the start of @nvmem
  * @size: The size of the cell, in bytes
+ * @bit_offset: Bit offset within the cell (0 for byte-level access)
+ * @nbits: Number of bits to use (0 for byte-level access)
  */
 struct nvmem_cell {
 	struct udevice *nvmem;
 	unsigned int offset;
 	size_t size;
+	unsigned int bit_offset;
+	unsigned int nbits;
 };
 
 struct udevice;
@@ -39,13 +43,27 @@ struct udevice;
 
 /**
  * nvmem_cell_read() - Read the value of an nvmem cell
- * @cell: The nvmem cell to read
+ * @cell: The nvmem cell to read, containing:
+ *        - @cell->offset: Byte offset within the NVMEM device
+ *        - @cell->size: Size of the cell in bytes
+ *        - @cell->nbits: Number of bits to extract (0 = read entire cell)
+ *        - @cell->bit_offset: Starting bit position for extraction
  * @buf: The buffer to read into
  * @size: The size of @buf
  *
+ * For cells with bit fields (@cell->nbits > 0), this function:
+ * - Reads the raw bytes from @cell->offset in hardware
+ * - Extracts the bit field using @cell->bit_offset and @cell->nbits
+ * - Returns the extracted value in @buf
+ * - Requires @size == sizeof(u32) and @cell->size <= sizeof(u32)
+ *
+ * For cells without bit fields (@cell->nbits == 0):
+ * - Reads raw bytes directly from @cell->offset
+ * - Requires @size == @cell->size
+ *
  * Return:
  * * 0 on success
- * * -EINVAL if @buf is not the same size as @cell.
+ * * -EINVAL if @size doesn't match requirements
  * * -ENOSYS if CONFIG_NVMEM is disabled
  * * A negative error if there was a problem reading the underlying storage
  */
@@ -53,13 +71,27 @@ int nvmem_cell_read(struct nvmem_cell *cell, void *buf, size_t size);
 
 /**
  * nvmem_cell_write() - Write a value to an nvmem cell
- * @cell: The nvmem cell to write
+ * @cell: The nvmem cell to write, containing:
+ *        - @cell->offset: Byte offset within the NVMEM device
+ *        - @cell->size: Size of the cell in bytes
+ *        - @cell->nbits: Number of bits to write (0 = write entire cell)
+ *        - @cell->bit_offset: Starting bit position for insertion
  * @buf: The buffer to write from
  * @size: The size of @buf
  *
+ * For cells with bit fields (@cell->nbits > 0), this function:
+ * - Performs Read-Modify-Write to preserve other bits at @cell->offset
+ * - Masks and shifts the value to @cell->bit_offset position
+ * - Merges with existing bits outside the @cell->nbits field
+ * - Requires @size == sizeof(u32) and @cell->size <= sizeof(u32)
+ *
+ * For cells without bit fields (@cell->nbits == 0):
+ * - Writes raw bytes directly to @cell->offset
+ * - Requires @size == @cell->size
+ *
  * Return:
  * * 0 on success
- * * -EINVAL if @buf is not the same size as @cell
+ * * -EINVAL if @size doesn't match requirements
  * * -ENOSYS if @cell is read-only, or if CONFIG_NVMEM is disabled
  * * A negative error if there was a problem writing the underlying storage
  */
