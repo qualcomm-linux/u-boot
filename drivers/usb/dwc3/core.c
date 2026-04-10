@@ -106,6 +106,8 @@ done:
 	if (DWC3_VER_IS_WITHIN(DWC31, ANY, 180A))
 		mdelay(50);
 
+	mdelay(100);
+
 	return 0;
 }
 

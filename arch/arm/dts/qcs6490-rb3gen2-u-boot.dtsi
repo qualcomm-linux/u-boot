@@ -18,7 +18,7 @@
 };
 
 &usb_1 {
-	dr_mode = "host";
+	dr_mode = "peripheral";
 };
 
 // RAM Entry 0 : Base 0x0080000000  Size 0x003A800000
