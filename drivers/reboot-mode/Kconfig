@@ -39,4 +39,12 @@ config REBOOT_MODE_NVMEM
 	  Use any kind of non-volatile memory (EEPROM, RTC, etc) to control the
 	  reboot mode.
 
+config REBOOT_MODE_ENV_UPDATE
+	bool "Automatically update reboot-mode env variable on boot"
+	depends on DM_REBOOT_MODE
+	help
+	  When enabled, the reboot-mode uclass will automatically call
+	  dm_reboot_mode_update() on the first reboot-mode device at last
+	  stage init.
+
 endmenu
