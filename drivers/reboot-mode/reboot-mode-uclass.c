@@ -6,6 +6,7 @@
 #include <dm.h>
 #include <dm/device_compat.h>
 #include <dm/devres.h>
+#include <event.h>
 #include <exports.h>
 #include <reboot-mode/reboot-mode.h>
 
@@ -116,9 +117,33 @@ int dm_reboot_mode_pre_probe(struct udevice *dev)
 	return 0;
 }
 
+/*
+ * reboot_mode_last_stage_init() - Update reboot-mode env variable at last
+ * stage init.
+ *
+ * Called via EVT_LAST_STAGE_INIT, which fires after the environment is fully
+ * initialized.
+ *
+ */
+static int reboot_mode_last_stage_init(void)
+{
+	struct udevice *dev;
+	int ret;
+
+	if (!CONFIG_IS_ENABLED(REBOOT_MODE_ENV_UPDATE))
+		return 0;
+
+	ret = uclass_first_device_err(UCLASS_REBOOT_MODE, &dev);
+	if (ret)
+		return 0;
+
+	return dm_reboot_mode_update(dev);
+}
+EVENT_SPY_SIMPLE(EVT_LAST_STAGE_INIT, reboot_mode_last_stage_init);
+
 UCLASS_DRIVER(reboot_mode) = {
-	.name	= "reboot-mode",
-	.id	= UCLASS_REBOOT_MODE,
+	.name		= "reboot-mode",
+	.id		= UCLASS_REBOOT_MODE,
 	.pre_probe	= dm_reboot_mode_pre_probe,
 	.per_device_plat_auto =
 		sizeof(struct reboot_mode_uclass_platdata),
