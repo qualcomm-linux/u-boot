@@ -8,8 +8,12 @@
 #include <mmc.h>
 #include <part.h>
 #include <part_efi.h>
+#include <asm/global_data.h>
+#include <dm/lists.h>
 #include <dm/test.h>
 #include <test/ut.h>
+
+DECLARE_GLOBAL_DATA_PTR;
 
 static int do_test(struct unit_test_state *uts, int expected,
 		   const char *part_str, bool whole)
@@ -195,3 +199,47 @@ static int dm_test_part_get_info_by_type(struct unit_test_state *uts)
 	return 0;
 }
 DM_TEST(dm_test_part_get_info_by_type, UTF_SCAN_PDATA | UTF_SCAN_FDT);
+
+static int dm_test_part_get_info_by_type_guid(struct unit_test_state *uts)
+{
+	struct udevice *dev, *blk_dev;
+	struct blk_desc *desc;
+	struct disk_partition info;
+	ofnode root, node;
+	int partnum;
+
+	if (!IS_ENABLED(CONFIG_PARTITION_TYPE_GUID))
+		return -EOPNOTSUPP;
+
+	/* Bind the mmc5 node (ChromeOS image with type GUIDs) */
+	root = oftree_root(oftree_default());
+	node = ofnode_find_subnode(root, "mmc5");
+	ut_assert(ofnode_valid(node));
+	ut_assertok(lists_bind_fdt(gd->dm_root, node, &dev, NULL, false));
+
+	/* Get the MMC device (probes it), then walk MMC -> BLK parent link */
+	ut_assertok(uclass_get_device_by_seq(UCLASS_MMC, 5, &dev));
+	ut_assertok(blk_get_from_parent(dev, &blk_dev));
+	desc = dev_get_uclass_plat(blk_dev);
+	ut_assert(desc);
+
+	/*
+	 * Test: look up the first ChromeOS kernel partition by type GUID.
+	 * In the ChromeOS image KERN_A is the first partition carrying the
+	 * ChromeOS kernel type GUID (fe3a2a5d-...).
+	 */
+	partnum = part_get_info_by_type_guid(desc,
+					     "FE3A2A5D-4F32-41A7-B725-ACCC3285A309",
+					     &info);
+	ut_assert(partnum > 0);
+
+	/* Test: non-existent GUID must return -ENOENT */
+	ut_asserteq(-ENOENT,
+		    part_get_info_by_type_guid(desc,
+					       "00000000-0000-0000-0000-000000000000",
+					       &info));
+
+	return 0;
+}
+
+DM_TEST(dm_test_part_get_info_by_type_guid, UTF_SCAN_PDATA | UTF_SCAN_FDT);
