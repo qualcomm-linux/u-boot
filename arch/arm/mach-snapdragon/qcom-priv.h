@@ -17,6 +17,8 @@ enum qcom_boot_source {
 
 extern enum qcom_boot_source qcom_boot_source;
 
+int board_serial_num(u32 *serial_num_ptr);
+
 #if IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_SUPPORT)
 void qcom_configure_capsule_updates(void);
 #else
