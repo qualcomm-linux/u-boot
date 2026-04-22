@@ -32,6 +32,8 @@
 #include <usb.h>
 #include <sort.h>
 #include <time.h>
+#include <smem.h>
+#include <soc/qcom/socinfo.h>
 
 #include "qcom-priv.h"
 
@@ -363,10 +365,39 @@ static const char *get_cmdline(void)
 	return cmdline;
 }
 
+/**
+ * board_serial_num() - Retrieves the board serial number from SMEM
+ * @serial_num_ptr: Pointer to store the serial number
+ *
+ * Return: 0 on success, negative error code on failure.
+ */
+static int board_serial_num(u32 *serial_num_ptr)
+{
+	struct socinfo *soc_info_ptr;
+	struct udevice *dev_ptr;
+	size_t total_size;
+
+	if (uclass_get_device(UCLASS_SMEM, 0, &dev_ptr) != 0)
+		return -ENODEV;
+
+	soc_info_ptr = smem_get(dev_ptr, 0, SMEM_HW_SW_BUILD_ID, &total_size);
+	if (!soc_info_ptr)
+		return -ENODATA;
+
+	*serial_num_ptr = soc_info_ptr->serial_num;
+	return 0;
+}
+
 void qcom_set_serialno(void)
 {
 	const char *cmdline = get_cmdline();
 	char serial[32];
+	u32 serial_num;
+
+	if (board_serial_num(&serial_num) == 0) {
+		env_set_hex("serial#", serial_num);
+		return;
+	}
 
 	if (!cmdline) {
 		log_debug("Failed to get bootargs\n");
