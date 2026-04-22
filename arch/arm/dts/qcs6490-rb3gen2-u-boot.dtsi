@@ -41,6 +41,29 @@
 			no-map;
 		};
 	};
+
+	/* Disable GPIO buttons in U-Boot to avoid pinctrl errors */
+	gpio-keys {
+		status = "disabled";
+	};
+
+	soc {
+		apps_smmu {
+			bootph-all;
+		};
+
+		tlmm {
+			bootph-all;
+
+			qup_uart5_tx {
+				bootph-all;
+			};
+
+			qup_uart5_rx {
+				bootph-all;
+			};
+		};
+	};
 };
 
 // RAM Entry 0 : Base 0x0080000000  Size 0x003A800000

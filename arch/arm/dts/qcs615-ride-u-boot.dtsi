@@ -75,6 +75,22 @@
 		mode-bootloader = <0x02>;
 		mode-recovery   = <0x01>;
 	};
+
+	soc@0 {
+		apps_smmu: iommu@15000000 {
+			bootph-all;
+		};
+
+		tlmm: pinctrl@3100000 {
+			qup_uart0_tx: qup-uart0-tx-state {
+				bootph-all;
+			};
+
+			qup_uart0_rx: qup-uart0-rx-state {
+				bootph-all;
+			};
+		};
+	};
 };
 
 &pm8150_0 {
