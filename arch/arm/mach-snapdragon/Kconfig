@@ -53,4 +53,11 @@ config QCOM_FIT_MULTIDTB
 	  This allows U-Boot to select the appropriate device tree
 	  from a FIT image.
 
+config QCOM_KVM_SUPPORT
+	bool "Enable KVM support for Qualcomm platforms"
+	depends on ARM64
+	help
+	  This configures the hypervisor interface during boot to support
+	  KVM virtualization instead of the default Gunyah hypervisor.
+
 endif
