@@ -20,6 +20,8 @@ enum qcom_boot_source {
 
 extern enum qcom_boot_source qcom_boot_source;
 
+int board_serial_num(u32 *serial_num_ptr);
+
 /**
  * qcom_get_smem_device() - Get cached SMEM device
  *
