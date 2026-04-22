@@ -588,6 +588,154 @@ void __weak qcom_late_init(void)
 {
 }
 
+/**
+ * qcom_configure_kvm_hypervisor() - Configure hypervisor for KVM guest mode
+ *
+ * Configures the hypervisor for KVM operation:
+ * - EL2 path: Direct SMC call
+ * - EL1 path: Save context, disable caches, SMC call, restore context
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+static int qcom_configure_kvm_hypervisor(void)
+{
+	struct arm_smccc_res res;
+	u64 current_el;
+	u64 ttbr0_el1, tcr_el1, tcr_el2, mair_el1;
+	u64 t0sz, phys_addr_size;
+
+	asm volatile("mrs %0, CurrentEL" : "=r" (current_el));
+	current_el = (current_el >> 2) & 0x3;
+
+	log_info("Configuring hypervisor for KVM (EL%llu)\n", current_el);
+
+	arm_smccc_smc(TZ_INFO_IS_SVC_AVAILABLE_ID,
+		      TZ_INFO_IS_SVC_AVAILABLE_ID_PARAM_ID,
+		      TZ_CONFIGURE_MILESTONE_SERVICE_ID,
+		      0, 0, 0, 0, 0, &res);
+
+	if (res.a0 != 0) {
+		log_warning("KVM milestone service not available (0x%lx)\n", res.a0);
+		return 0;
+	}
+
+	if (current_el == 2) {
+		log_debug("At EL2\n");
+
+		arm_smccc_smc(TZ_CONFIGURE_MILESTONE_SERVICE_ID,
+			      TZ_CONFIGURE_MILESTONE_SERVICE_PARAM_ID,
+			      0, 0, QCOM_HYP_BOOT_TYPE_KVM,
+			      0, 0, 0, &res);
+
+		if (res.a0 != 0) {
+			log_err("Hypervisor configuration failed: 0x%lx\n", res.a0);
+			return -EIO;
+		}
+
+		log_info("KVM hypervisor configured\n");
+		return 0;
+	}
+
+	log_debug("At EL1, saving register context\n");
+
+	/* Save EL1 system register context */
+	asm volatile("mrs %0, ttbr0_el1" : "=r" (ttbr0_el1));
+	asm volatile("mrs %0, tcr_el1" : "=r" (tcr_el1));
+	asm volatile("mrs %0, mair_el1" : "=r" (mair_el1));
+
+	t0sz = tcr_el1 & TCR_T0SZ_MASK;
+	phys_addr_size = tcr_el1 & TCR_PS_MASK;
+
+	log_debug("Saved context: TTBR0=0x%llx TCR=0x%llx MAIR=0x%llx\n",
+		  ttbr0_el1, tcr_el1, mair_el1);
+
+	icache_disable();
+	dcache_disable();
+
+	arm_smccc_smc(TZ_CONFIGURE_MILESTONE_SERVICE_ID,
+		      TZ_CONFIGURE_MILESTONE_SERVICE_PARAM_ID,
+		      0, 0, QCOM_HYP_BOOT_TYPE_KVM,
+		      0, 0, 0, &res);
+
+	if (res.a0 != 0) {
+		log_err("Hypervisor configuration failed: 0x%lx\n", res.a0);
+		icache_enable();
+		dcache_enable();
+		return -EIO;
+	}
+
+	asm volatile("mrs %0, CurrentEL" : "=r" (current_el));
+	current_el = (current_el >> 2) & 0x3;
+
+	asm volatile("msr ttbr0_el1, %0" : : "r" (ttbr0_el1));
+	asm volatile("isb");
+
+	if (current_el != 2) {
+		log_err("Hypervisor configuration failed: 0x%lx\n", res.a0);
+		icache_enable();
+		dcache_enable();
+		return -EIO;
+	}
+
+	/* Read current TCR_EL2 and reconfigure it */
+	asm volatile("mrs %0, tcr_el2" : "=r" (tcr_el2));
+
+	tcr_el2 &= ~(TCR_T0SZ_MASK | (0x7UL << 16));
+	tcr_el2 |= t0sz | (phys_addr_size >> TCR_PS_SHIFT);
+
+	tcr_el2 &= ~TCR_SH_ORGN_IRGN_MASK;
+	tcr_el2 |= TCR_SHARED_INNER |
+		   TCR_ORGN_WBWA |
+		   TCR_IRGN_WBWA;
+
+	asm volatile("msr tcr_el2, %0" : : "r" (tcr_el2));
+	asm volatile("msr mair_el1, %0" : : "r" (mair_el1));
+	asm volatile("isb");
+
+	icache_enable();
+	dcache_enable();
+
+	log_info("KVM hypervisor configured\n");
+	return 0;
+}
+
+/**
+ * qcom_configure_gunyah_hypervisor() - Configure hypervisor for Gunyah mode
+ *
+ * Configures the hypervisor for standard Gunyah operation.
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+static int qcom_configure_gunyah_hypervisor(void)
+{
+	struct arm_smccc_res res;
+
+	log_info("Configuring hypervisor for Gunyah mode\n");
+
+	arm_smccc_smc(TZ_INFO_IS_SVC_AVAILABLE_ID,
+		      TZ_INFO_IS_SVC_AVAILABLE_ID_PARAM_ID,
+		      TZ_CONFIGURE_MILESTONE_SERVICE_ID,
+		      0, 0, 0, 0, 0, &res);
+
+	if (res.a0 != 0) {
+		log_debug("Hypervisor milestone service not available (0x%lx)\n", res.a0);
+		return 0;
+	}
+
+	arm_smccc_smc(TZ_CONFIGURE_MILESTONE_SERVICE_ID,
+		      TZ_CONFIGURE_MILESTONE_SERVICE_PARAM_ID,
+		      0, 0, QCOM_HYP_BOOT_TYPE_GUNYAH,
+		      0, 0, 0, &res);
+
+	if (res.a0 != 0) {
+		log_err("Hypervisor configuration failed: 0x%lx\n", res.a0);
+		return -EIO;
+	}
+
+	log_info("Gunyah hypervisor configured\n");
+	return 0;
+}
+
 #define KERNEL_COMP_SIZE	SZ_64M
 #ifdef CONFIG_FASTBOOT_BUF_SIZE
 #define FASTBOOT_BUF_SIZE CONFIG_FASTBOOT_BUF_SIZE
@@ -891,6 +1039,18 @@ void enable_caches(void)
 		debug("carveout time: %lums\n", get_timer(carveout_start));
 	}
 	dcache_enable();
+}
+
+/**
+ * board_quiesce_devices() - Quiesce devices before booting kernel
+ *
+ */
+void board_quiesce_devices(void)
+{
+	if (IS_ENABLED(CONFIG_QCOM_KVM_SUPPORT))
+		qcom_configure_kvm_hypervisor();
+	else
+		qcom_configure_gunyah_hypervisor();
 }
 
 /**
