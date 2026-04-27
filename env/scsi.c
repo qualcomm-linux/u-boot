@@ -41,14 +41,17 @@ static inline struct env_scsi_info *env_scsi_get_part(void)
 		is_scsi_scanned = true;
 	}
 
-	if (CONFIG_ENV_SCSI_PART_UUID[0] == '\0') {
-		if (blk_get_device_part_str("scsi", CONFIG_ENV_SCSI_HW_PARTITION,
-					    &ep->blk, &ep->part, true))
-			return NULL;
-	} else {
-		if (scsi_get_blk_by_uuid(CONFIG_ENV_SCSI_PART_UUID, &ep->blk, &ep->part))
-			return NULL;
-	}
+#if defined(CONFIG_ENV_SCSI_PART_USE_TYPE_GUID)
+	if (scsi_get_blk_by_type_guid(CONFIG_ENV_SCSI_PART_TYPE_GUID, &ep->blk, &ep->part))
+		return NULL;
+#elif defined(CONFIG_ENV_SCSI_PART_USE_UUID)
+	if (scsi_get_blk_by_uuid(CONFIG_ENV_SCSI_PART_UUID, &ep->blk, &ep->part))
+		return NULL;
+#elif defined(CONFIG_ENV_SCSI_PART_USE_HW)
+	if (blk_get_device_part_str("scsi", CONFIG_ENV_SCSI_HW_PARTITION,
+				    &ep->blk, &ep->part, true))
+		return NULL;
+#endif
 
 	ep->count = CONFIG_ENV_SIZE / ep->part.blksz;
 
@@ -95,20 +98,24 @@ static int env_scsi_load(void)
 	int ret;
 
 	if (!ep) {
-		if (CONFIG_ENV_SCSI_PART_UUID[0] == '\0')
-			env_set_default("SCSI partition " CONFIG_ENV_SCSI_HW_PARTITION " not found", 0);
-		else
-			env_set_default(CONFIG_ENV_SCSI_PART_UUID " partition not found", 0);
-
+#if defined(CONFIG_ENV_SCSI_PART_USE_TYPE_GUID)
+		env_set_default("partition type " CONFIG_ENV_SCSI_PART_TYPE_GUID " not found", 0);
+#elif defined(CONFIG_ENV_SCSI_PART_USE_UUID)
+		env_set_default(CONFIG_ENV_SCSI_PART_UUID " partition not found", 0);
+#elif defined(CONFIG_ENV_SCSI_PART_USE_HW)
+		env_set_default("SCSI partition " CONFIG_ENV_SCSI_HW_PARTITION " not found", 0);
+#endif
 		return -ENOENT;
 	}
 
 	if (blk_dread(ep->blk, ep->part.start, ep->count, &envbuf) != ep->count) {
-		if (CONFIG_ENV_SCSI_PART_UUID[0] == '\0')
-			env_set_default("SCSI partition " CONFIG_ENV_SCSI_HW_PARTITION " read failed", 0);
-		else
-			env_set_default(CONFIG_ENV_SCSI_PART_UUID " partition read failed", 0);
-
+#if defined(CONFIG_ENV_SCSI_PART_USE_TYPE_GUID)
+		env_set_default("partition type " CONFIG_ENV_SCSI_PART_TYPE_GUID " read failed", 0);
+#elif defined(CONFIG_ENV_SCSI_PART_USE_UUID)
+		env_set_default(CONFIG_ENV_SCSI_PART_UUID " partition read failed", 0);
+#elif defined(CONFIG_ENV_SCSI_PART_USE_HW)
+		env_set_default("SCSI partition " CONFIG_ENV_SCSI_HW_PARTITION " read failed", 0);
+#endif
 		return -EIO;
 	}
 
