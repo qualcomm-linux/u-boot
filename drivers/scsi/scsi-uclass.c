@@ -30,9 +30,10 @@ int scsi_get_blk_by_uuid(const char *uuid,
 			 struct disk_partition *part_info_ptr)
 {
 	struct blk_desc *blk;
-	int i, ret;
+	int i, ret, max;
 
-	for (i = 0; i < blk_find_max_devnum(UCLASS_SCSI) + 1; i++) {
+	max = blk_find_max_devnum(UCLASS_SCSI) + 1;
+	for (i = 0; i < max; i++) {
 		ret = blk_get_desc(UCLASS_SCSI, i, &blk);
 		if (ret)
 			continue;
