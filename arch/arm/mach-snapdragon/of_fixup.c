@@ -286,7 +286,9 @@ int ft_board_setup(void __maybe_unused *blob, struct bd_info __maybe_unused *bd)
 {
 	struct fdt_header *fdt = blob;
 
+	boardinfo_fixup_handler(fdt);
 	ddrinfo_fixup_handler(fdt);
+	subsetparts_fixup_handler(fdt);
 
 	return 0;
 }

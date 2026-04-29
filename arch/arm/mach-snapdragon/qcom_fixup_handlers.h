@@ -18,6 +18,30 @@ enum fdt_fixup_type {
 };
 
 /**
+ * boardinfo_fixup_handler() - Board info fixup handler.
+ * @fdt_ptr: Pointer to the device tree.
+ *
+ * This function is called to fix up the device tree blob (DTB) for the board.
+ * It adds or modifies nodes, properties, and values as necessary to ensure
+ * the DTB is in a valid state for the board.
+ *
+ * Return: None
+ */
+void boardinfo_fixup_handler(struct fdt_header *fdt_ptr);
+
+/**
+ * subsetparts_fixup_handler() - This function is the entry point for the
+ * Subset Parts fixup handler.
+ * @fdt_ptr: The firmware DT node to update.
+ *
+ * It reads the SOC info from the SMEM, extracts the disabled subset parts, and
+ * exports them to the firmware DT node.
+ *
+ * Return: None
+ */
+void subsetparts_fixup_handler(struct fdt_header *fdt_ptr);
+
+/**
  * ddrinfo_fixup_handler() - DDRInfo Fixup handler function
  * @fdt_ptr: Pointer to the device tree
  *
