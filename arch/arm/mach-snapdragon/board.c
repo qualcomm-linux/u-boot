@@ -34,6 +34,7 @@
 #include <usb.h>
 #include <soc/qcom/smem.h>
 #include <sort.h>
+#include <soc/qcom/smem.h>
 #include <time.h>
 
 #include "qcom-priv.h"
@@ -254,8 +255,13 @@ static const char *get_cmdline(void)
 
 void qcom_set_serialno(void)
 {
-	const char *cmdline = get_cmdline();
+	const char *cmdline;
 	char serial[32];
+
+	if (!qcom_socinfo_init())
+		return;
+
+	cmdline = get_cmdline();
 
 	if (!cmdline) {
 		log_debug("Failed to get bootargs\n");
@@ -475,6 +481,9 @@ int board_late_init(void)
 	else
 		memcpy((void *)addr, (void *)gd->fdt_blob,
 		       fdt32_to_cpu(fdt_blob->totalsize));
+
+	/* Initialise SMEM if it wasn't done already and ensure it's memory is mapped */
+	qcom_smem_init();
 
 	configure_env();
 	qcom_late_init();
