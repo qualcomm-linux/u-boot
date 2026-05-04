@@ -163,7 +163,7 @@ u64 get_tcr(u64 *pips, u64 *pva_bits)
 
 static int pte_type(u64 *pte)
 {
-	return *pte & PTE_TYPE_MASK;
+	return *pte & PTE_TYPE_VALID ? *pte & PTE_TYPE_MASK : PTE_TYPE_FAULT;
 }
 
 /* Returns the LSB number for a PTE on level <level> */
@@ -940,6 +940,18 @@ static u64 set_one_region(u64 start, u64 size, u64 attrs, bool flag, int level)
 	u64 levelsize = 1ULL << levelshift;
 	u64 *pte = find_pte(start, level);
 
+	/*
+	 * If we're trying to unmap a region then check if it's already unmapped or if it's bigger
+	 * then the PTE we're looking at right now, in the first case we can do nothing and in the
+	 * second case we just need to unmap this page/block.
+	 * Otherwise we will needlessly create new tables until we have traversed every single page
+	 * in the region.
+	 */
+	if (attrs == PTE_TYPE_FAULT && (pte_type(pte) == PTE_TYPE_FAULT || size >= levelsize)) {
+		*pte &= ~(PMD_ATTRMASK | PTE_TYPE_MASK);
+		return levelsize;
+	}
+
 	/* Can we can just modify the current level block PTE? */
 	if (is_aligned(start, size, levelsize)) {
 		if (flag) {
@@ -1081,6 +1093,10 @@ void mmu_change_region_attr(phys_addr_t addr, size_t siz, u64 attrs)
 	flush_dcache_range(gd->arch.tlb_addr,
 			   gd->arch.tlb_addr + gd->arch.tlb_size);
 	__asm_invalidate_tlb_all();
+
+	/* If we were unmapping a region then we're done! */
+	if (attrs == PTE_TYPE_FAULT)
+		return;
 
 	mmu_change_region_attr_nobreak(addr, siz, attrs);
 }
