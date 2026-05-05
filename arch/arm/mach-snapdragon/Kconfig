@@ -42,4 +42,12 @@ config SYS_CONFIG_NAME
 	  Based on this option include/configs/<CONFIG_SYS_CONFIG_NAME>.h header
 	  will be used for board configuration.
 
+config QCOM_FIT_MULTIDTB
+	bool "Enable FIT multi-DTB selection for Qualcomm platforms"
+	depends on FIT
+	help
+	  Enable FIT multi-DTB selection for Qualcomm platforms.
+	  This allows U-Boot to select the appropriate device tree
+	  from a FIT image.
+
 endif
