@@ -12,6 +12,7 @@
 #include <blk.h>
 #include <dm.h>
 #include <env.h>
+#include <fat.h>
 #include <image.h>
 #include <lmb.h>
 #include <log.h>
@@ -27,7 +28,8 @@
 #include "qcom_fit_multidtb.h"
 #include "qcom_hwdetect.h"
 
-/* GPT partition name containing the FIT image */
+/* FIT image filename on FAT partition and raw partition name */
+#define QCOM_FIT_FILENAME	"qclinux_fit.img"
 #define QCOM_FIT_PARTNAME	"dtb_a"
 
 #define lmb_alloc(size, addr) \
@@ -492,6 +494,45 @@ static size_t qcom_fit_calc_size(const void *fit, size_t buf_size)
 }
 
 /**
+ * qcom_find_fat_file() - Find a file on any FAT partition across all block devices
+ * @filename: Filename to search for
+ * @descp: Returns block descriptor of the partition containing the file
+ * @part_info: Returns partition info of the found partition
+ *
+ * Iterates through all block devices and their partitions, mounting each as
+ * FAT and checking if the file exists.
+ *
+ * Return: 0 on success, -ENOENT if not found
+ */
+static int qcom_find_fat_file(const char *filename, struct blk_desc **descp,
+			      struct disk_partition *part_info)
+{
+	struct udevice *blk_dev;
+	struct blk_desc *desc;
+	loff_t file_size;
+	int partnum;
+
+	blk_foreach_probe(BLKF_BOTH, blk_dev) {
+		desc = dev_get_uclass_plat(blk_dev);
+		if (!desc)
+			continue;
+
+		for (partnum = 1; partnum <= MAX_SEARCH_PARTITIONS; partnum++) {
+			if (part_get_info(desc, partnum, part_info))
+				break;
+			if (fat_set_blk_dev(desc, part_info))
+				continue;
+			if (!fat_size(filename, &file_size)) {
+				*descp = desc;
+				return 0;
+			}
+		}
+	}
+
+	return -ENOENT;
+}
+
+/**
  * qcom_load_raw_partition() - Load FIT image from a raw partition by name
  * @partname: GPT partition name to search for
  * @fitp: Pointer to store FIT image address
@@ -571,6 +612,56 @@ static int qcom_load_raw_partition(const char *partname, void **fitp,
 
 	log_info("Loaded raw partition '%s': %zu bytes\n", partname, fit_size);
 	return 0;
+}
+
+/**
+ * qcom_load_fit_image() - Load FIT image from FAT partition or raw partition
+ * @filename: Filename to search for on FAT partitions
+ * @partname: GPT partition name to use as fallback (raw image)
+ * @fitp: Pointer to store FIT image address
+ * @fit_sizep: Pointer to store FIT image size
+ *
+ * First tries to find @filename on any FAT partition across all block devices.
+ * If not found, falls back to reading the raw partition named @partname.
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+static int qcom_load_fit_image(const char *filename, const char *partname,
+			       void **fitp, size_t *fit_sizep)
+{
+	struct blk_desc *desc;
+	struct disk_partition part_info;
+	loff_t file_size;
+	void *fit_buf;
+	int ret;
+
+	log_info("%s: Loading FIT image\n", __func__);
+
+	/* Try FAT first: search for filename on any FAT partition */
+	ret = qcom_find_fat_file(filename, &desc, &part_info);
+	if (!ret) {
+		fat_size(filename, &file_size);
+
+		fit_buf = malloc(file_size);
+		if (!fit_buf)
+			return -ENOMEM;
+
+		ret = file_fat_read(filename, fit_buf, file_size);
+		if (ret >= 0) {
+			log_info("Loaded '%s' from FAT partition: %lld bytes\n",
+				 filename, file_size);
+			*fitp = fit_buf;
+			*fit_sizep = file_size;
+			return 0;
+		}
+
+		log_debug("FAT read of '%s' failed (%d), trying raw partition\n",
+			  filename, ret);
+		free(fit_buf);
+	}
+
+	/* Fallback: try raw partition by name */
+	return qcom_load_raw_partition(partname, fitp, fit_sizep);
 }
 
 /**
@@ -935,7 +1026,8 @@ int qcom_fit_multidtb_setup(void)
 	log_debug("=== FIT Multi-DTB Selection ===\n");
 
 	log_debug("Loading FIT image\n");
-	ret = qcom_load_raw_partition(QCOM_FIT_PARTNAME, &fit, &fit_size);
+	ret = qcom_load_fit_image(QCOM_FIT_FILENAME, QCOM_FIT_PARTNAME,
+				  &fit, &fit_size);
 	if (ret) {
 		log_err("Failed to load FIT image\n");
 		goto cleanup_fit;
