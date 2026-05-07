@@ -306,9 +306,10 @@ void flush_l3_cache(void);
  *
  * @start: Start address of the region
  * @size: Size of the region
+ * @cached: Map memory as cacheable or not
  * @emerg: Also map the region in the emergency table
  */
-void mmu_map_region(phys_addr_t start, u64 size, bool emerg);
+void mmu_map_region(phys_addr_t start, u64 size, bool cached, bool emerg);
 
 /**
  * mmu_change_region_attr() - change a mapped region attributes
