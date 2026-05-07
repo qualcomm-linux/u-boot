@@ -163,7 +163,7 @@ u64 get_tcr(u64 *pips, u64 *pva_bits)
 
 static int pte_type(u64 *pte)
 {
-	return *pte & PTE_TYPE_MASK;
+	return *pte & PTE_TYPE_VALID ? *pte & PTE_TYPE_MASK : PTE_TYPE_FAULT;
 }
 
 /* Returns the LSB number for a PTE on level <level> */
@@ -948,7 +948,7 @@ static u64 set_one_region(u64 start, u64 size, u64 attrs, bool flag, int level)
 	 * in the region.
 	 */
 	if (attrs == PTE_TYPE_FAULT && (pte_type(pte) == PTE_TYPE_FAULT || size >= levelsize)) {
-		*pte &= ~PMD_ATTRMASK;
+		*pte &= ~(PMD_ATTRMASK | PTE_TYPE_MASK);
 		return levelsize;
 	}
 
