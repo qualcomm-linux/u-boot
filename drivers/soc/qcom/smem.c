@@ -973,7 +973,7 @@ static int qcom_smem_map_toc(struct qcom_smem *smem, struct smem_region *region)
 	if (!region->virt_base || !smem->ptable)
 		return -ENOMEM;
 
-	if (dcache_status())
+	if (mmu_status())
 		mmu_map_region(region->aux_base, region->size, false, false);
 
 	return 0;
@@ -1029,7 +1029,7 @@ int qcom_smem_init(void)
 	int ret;
 	int i;
 
-	if (dcache_status() && smem)
+	if (mmu_status() && smem)
 		mmu_map_region(smem->regions[0].aux_base, smem->regions[0].size,
 			       false, false);
 
