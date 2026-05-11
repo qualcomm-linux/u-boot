@@ -64,6 +64,13 @@ config BOOT0_MSM8916_PSCI_WORKAROUND
 	help
 	  Select this if you are building U-Boot proper for an msm8916 board that
 	  uses the buggy PSCI implementation.
+
+config QCOM_EL2_GUNYAH_EXIT_SUPPORT
+	bool "Enable early EL2 switch by exiting Gunyah"
+	help
+	  Exit Gunyah hypervisor and switch to EL2 during early boot. This must
+	  happen before EL register configuration in start.S so that U-Boot can
+	  run properly at EL2.
 endchoice
 
 endif
