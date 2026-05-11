@@ -135,5 +135,14 @@ config QCOM_SNAGBOOT_MODE
 	  Platform-specific requirements:
 	  - Set CONFIG_COUNTER_FREQUENCY to match your platform's timer
 	  - Configure CONFIG_TEXT_BASE for U-Boot load address
+config QCOM_GENERATE_MBN
+	bool "Generate an MBN-compatible ELF binary"
+	help
+	  Enable this if you intend to flash U-Boot as a first-stage bootloader.
+	  The build system will generate a board-specific ELF file with the appropriate
+	  MBN hash segments and test keys.
+
+	  New platforms can be added to tools/qcom/mkmbn/mkmbn.py if they aren't already
+	  supported.
 
 endif
