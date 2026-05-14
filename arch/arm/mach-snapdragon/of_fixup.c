@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <tee/optee.h>
 #include <time.h>
+#include "qcom_fixup_handlers.h"
 
 /**
  * find_ssphy_node() - Find the super-speed PHY node referenced by DWC3
@@ -283,5 +284,88 @@ EVENT_SPY_FULL(EVT_OF_LIVE_BUILT, qcom_of_fixup_nodes);
 
 int ft_board_setup(void __maybe_unused *blob, struct bd_info __maybe_unused *bd)
 {
+	struct fdt_header *fdt = blob;
+
+	boardinfo_fixup_handler(fdt);
+	ddrinfo_fixup_handler(fdt);
+	subsetparts_fixup_handler(fdt);
+
 	return 0;
+}
+
+int fixup_dt_node(void *fdt_ptr, int node_offset,
+		  const char *property_name,
+		  void *property_value,
+		  enum fdt_fixup_type type)
+{
+	int ret;
+
+	if ((!fdt_ptr || node_offset < 0) ||
+	    (!property_value && type != ADD_SUBNODE))
+		return -1;
+
+	switch (type) {
+	case APPEND_PROP_U32:
+		fdt_set_totalsize(fdt_ptr,
+				  (fdt_totalsize(fdt_ptr)
+				  + sizeof(struct fdt_property)
+				  + strlen(property_name) + 3
+				  + sizeof(u32)));
+		ret = fdt_appendprop_u32(fdt_ptr, node_offset,
+					 property_name,
+					 *(u32 *)property_value);
+		break;
+	case APPEND_PROP_U64:
+		fdt_set_totalsize(fdt_ptr,
+				  (fdt_totalsize(fdt_ptr)
+				  + sizeof(struct fdt_property)
+				  + strlen(property_name) + 3
+				  + sizeof(u64)));
+		ret = fdt_appendprop_u64(fdt_ptr, node_offset,
+					 property_name,
+					 *(u64 *)property_value);
+		break;
+	case SET_PROP_U32:
+		fdt_set_totalsize(fdt_ptr,
+				  (fdt_totalsize(fdt_ptr)
+				  + sizeof(struct fdt_property)
+				  + strlen(property_name) + 3
+				  + sizeof(u32)));
+		ret = fdt_setprop_u32(fdt_ptr, node_offset,
+				      property_name,
+				      *(u32 *)property_value);
+		break;
+	case SET_PROP_U64:
+		fdt_set_totalsize(fdt_ptr,
+				  (fdt_totalsize(fdt_ptr)
+				  + sizeof(struct fdt_property)
+				  + strlen(property_name) + 3
+				  + sizeof(u64)));
+		ret = fdt_setprop_u64(fdt_ptr, node_offset,
+				      property_name,
+				      *(u64 *)property_value);
+		break;
+	case SET_PROP_STRING:
+		fdt_set_totalsize(fdt_ptr,
+				  (fdt_totalsize(fdt_ptr)
+				  + sizeof(struct fdt_property)
+				  + strlen(property_name) + 3
+				  + strlen((char *)property_value)));
+		ret = fdt_setprop_string(fdt_ptr, node_offset,
+					 property_name,
+					 (char *)property_value);
+		break;
+	case ADD_SUBNODE:
+		fdt_set_totalsize(fdt_ptr,
+				  (fdt_totalsize(fdt_ptr)
+				  + sizeof(struct fdt_property)
+				  + strlen(property_name) + 3));
+		ret = fdt_add_subnode(fdt_ptr, node_offset,
+				      property_name);
+		break;
+	default:
+		ret = -1;
+	}
+
+	return ret;
 }
