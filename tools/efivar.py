@@ -79,6 +79,50 @@ class EfiVariable:
 def calc_crc32(buf):
     return zlib.crc32(buf) & 0xffffffff
 
+def strip_auth_descriptor(data, attrs):
+    """
+    Strip the EFI auth descriptor from authenticated variable data.
+
+    This is used during efivar.py-based pre-seeding of ubootefi.var to
+    match U-Boot SetVariable() behavior, where the authentication header
+    is consumed during validation and only the payload is stored.
+
+    For variables with EFI_VARIABLE_TIME_BASED_AUTHENTICATED_WRITE_ACCESS:
+    - Input format: [EFI_VARIABLE_AUTHENTICATION_2 | payload]
+    - Stored format: [payload only]
+
+    Auth header size calculation (aligned with U-Boot efi_variable_authenticate()):
+        auth_size = sizeof(EFI_TIME) + WIN_CERTIFICATE.dwLength
+
+    Only the payload portion is retained after stripping the header.
+    """
+    if not (attrs & EFI_VARIABLE_TIME_BASED_AUTHENTICATED_WRITE_ACCESS):
+        return data
+    if not data:
+        return data
+
+    efi = EfiStruct()
+    if len(data) < efi.var_time_size:
+        return data
+
+    offset = efi.var_time_size
+    if len(data) < offset + efi.var_win_cert_size:
+        return data
+
+    try:
+        cert_hdr = struct.unpack_from(efi.var_win_cert_fmt, data, offset)
+        dwLength = cert_hdr[0]
+    except struct.error:
+        return data
+
+    auth_size = efi.var_time_size + dwLength
+    if auth_size <= 0 or auth_size > len(data):
+        return data
+
+    if len(data) <= auth_size:
+        return b''
+    return data[auth_size:]
+
 class EfiVariableStore:
     def __init__(self, infile):
         self.infile = infile
@@ -172,8 +216,12 @@ class EfiVariableStore:
                 break
             offs = loffs
 
+        if data and (attrs & EFI_VARIABLE_TIME_BASED_AUTHENTICATED_WRITE_ACCESS):
+            data = strip_auth_descriptor(data, attrs)
+            size = len(data) if data else 0
+
         tsec = int(time.time()) if attrs & EFI_VARIABLE_TIME_BASED_AUTHENTICATED_WRITE_ACCESS else 0
-        nd = name.encode('utf_16_le') + b"\x00\x00" + data
+        nd = name.encode('utf_16_le') + b"\x00\x00" + (data if data else b'')
         # U-Boot variable format requires the name + data blob to be 8-byte aligned
         pad = ((len(nd) + 7) & ~7) - len(nd)
         nd += bytes([0] * pad)
