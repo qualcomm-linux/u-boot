@@ -7,6 +7,7 @@
  * run properly at EL2.
  */
 
+#include <asm/macro.h>
 #include <linux/arm-smccc.h>
 
 /* TrustZone SMC IDs for hypervisor configuration */
@@ -14,13 +15,11 @@
 #define TZ_EL2_SWITCH_PARAM_ID			0x00000023
 #define TZ_EL2_SWITCH_PARAM2_EXIT_GUNYAH	0x1
 
-	/* Save FDT address before we modify x0 */
-	mov	x9, x0
-
 	/* Only perform hypervisor switch if we're at EL1 */
-	mrs	x0, CurrentEL
-	cmp	x0, #(1 << 2)
-	bne	1f
+	switch_el x9, 3f, 2f, 1f
+
+	/* Save FDT address before we modify x0 */
+1:	mov	x9, x0
 
 	/* Switch to EL2 (exit Gunyah) */
 	ldr	w0, =TZ_EL2_SWITCH_SMC_ID
@@ -32,5 +31,5 @@
 
 	/* Restore FDT address */
 	mov	x0, x9
-1:
-	b	reset
+2:
+3:	b	reset
