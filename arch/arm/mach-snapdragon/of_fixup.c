@@ -281,7 +281,87 @@ static int qcom_of_fixup_nodes(void * __maybe_unused ctx, struct event *event)
 
 EVENT_SPY_FULL(EVT_OF_LIVE_BUILT, qcom_of_fixup_nodes);
 
-int ft_board_setup(void __maybe_unused *blob, struct bd_info __maybe_unused *bd)
+int ft_board_setup(void *blob, struct bd_info __maybe_unused *bd)
 {
+	struct device_node *uboot_parent_np, *uboot_node_np;
+	int kernel_parent, ret;
+	const char *name;
+	const void *prop;
+	int proplen;
+
+	/* Only apply fixup for Talos and Kodiak platforms */
+	if (!of_device_is_compatible(gd->of_root, "qcom,talos-evk", NULL, NULL) &&
+	    !of_device_is_compatible(gd->of_root, "qcom,qcs615", NULL, NULL) &&
+	    !of_device_is_compatible(gd->of_root, "qcom,qcs6490-rb3gen2", NULL, NULL) &&
+	    !of_device_is_compatible(gd->of_root, "qcom,qcm6490", NULL, NULL)) {
+		return 0;
+	}
+
+	/* Get U-Boot's reserved-memory node */
+	uboot_parent_np = of_find_node_by_path("/reserved-memory");
+	if (!uboot_parent_np)
+		return 0;
+
+	/* Find kernel's reserved-memory node */
+	kernel_parent = fdt_path_offset(blob, "/reserved-memory");
+	if (kernel_parent < 0) {
+		debug("No reserved-memory node in kernel DT, skipping fixup\n");
+		return 0;
+	}
+
+	/* Iterate through U-Boot's reserved-memory subnodes */
+	for (uboot_node_np = uboot_parent_np->child; uboot_node_np; uboot_node_np = uboot_node_np->sibling) {
+		name = uboot_node_np->name;
+		if (!name) {
+			log_warning("Failed to get name for reserved-memory subnode\n");
+			continue;
+		}
+
+		/* Check if this node already exists in kernel DT by name */
+		if (fdt_subnode_offset(blob, kernel_parent, name) >= 0) {
+			debug("Reserved region '%s' already exists in kernel DT, skipping\n", name);
+			continue;
+		}
+
+		/* Get the reg property */
+		prop = of_get_property(uboot_node_np, "reg", &proplen);
+		if (!prop || proplen <= 0) {
+			log_warning("Reserved region '%s' has no valid reg property, skipping\n", name);
+			continue;
+		}
+
+		/* Add this node to kernel DT */
+		int new_node = fdt_add_subnode(blob, kernel_parent, name);
+
+		if (new_node < 0) {
+			log_err("Failed to add reserved region '%s': %d\n", name, new_node);
+			continue;
+		}
+
+		/* Copy the reg property */
+		ret = fdt_setprop(blob, new_node, "reg", prop, proplen);
+		if (ret < 0) {
+			log_err("Failed to set reg property for '%s': %d\n", name, ret);
+			continue;
+		}
+
+		/* Copy no-map property if it exists */
+		if (of_get_property(uboot_node_np, "no-map", NULL)) {
+			ret = fdt_setprop_empty(blob, new_node, "no-map");
+			if (ret < 0)
+				log_warning("Failed to set no-map for '%s': %d\n", name, ret);
+		}
+
+		/* Copy compatible property if it exists */
+		prop = of_get_property(uboot_node_np, "compatible", &proplen);
+		if (prop && proplen > 0) {
+			ret = fdt_setprop(blob, new_node, "compatible", prop, proplen);
+			if (ret < 0)
+				log_warning("Failed to set compatible for '%s': %d\n", name, ret);
+		}
+
+		debug("Added reserved region '%s' to kernel DT\n", name);
+	}
+
 	return 0;
 }
