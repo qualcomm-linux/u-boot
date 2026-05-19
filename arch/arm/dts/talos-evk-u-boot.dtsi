@@ -60,3 +60,11 @@
 		};
 	};
 };
+
+&usb_1 {
+	dr_mode = "otg";
+};
+
+&usb_2 {
+	dr_mode = "otg";
+};
