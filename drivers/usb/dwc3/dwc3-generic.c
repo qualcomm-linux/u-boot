@@ -220,6 +220,7 @@ U_BOOT_DRIVER(dwc3_generic_peripheral) = {
 	.remove = dwc3_generic_peripheral_remove,
 	.priv_auto	= sizeof(struct dwc3_generic_priv),
 	.plat_auto	= sizeof(struct dwc3_generic_plat),
+	.flags  = DM_FLAG_LEAVE_PD_ON,
 };
 #endif
 
