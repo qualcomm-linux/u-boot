@@ -94,3 +94,8 @@
 &usb_2 {
 	dr_mode = "otg";
 };
+
+/* Disable SD card controller */
+&sdhc_2 {
+	status = "disabled";
+};
