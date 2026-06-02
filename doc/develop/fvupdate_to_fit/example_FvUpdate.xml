@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+/** @file FVUpdate.xml
+
+    This file configures the content of the payload for firmware update
+
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+**/
+
+#Operation Type
+  IGNORE  - Skip this entry (not processed by fvupdate_to_fit.py)
+  UPDATE  - Include this entry in the capsule
+
+#NOTE: PartitionName is Case sensitive
+
+-->
+<FVItems>
+
+<!--BootLoader entries-->
+
+<!--FwEntry for UBoot-->
+  <FwEntry>
+    <InputBinary>u-boot.mbn</InputBinary>
+    <Operation>UPDATE</Operation>
+    <Dest>
+      <PartitionName>uefi_a</PartitionName>
+    </Dest>
+  </FwEntry>
+
+<!--FwEntry for TZ-->
+  <FwEntry>
+    <InputBinary>tz.mbn</InputBinary>
+    <Operation>UPDATE</Operation>
+    <Dest>
+      <PartitionName>tz_a</PartitionName>
+    </Dest>
+  </FwEntry>
+
+<!--Add FwEntries based on requirement-->
+
+</FVItems>
