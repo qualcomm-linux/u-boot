@@ -32,6 +32,13 @@ config PHY_QCOM_QMP_UFS
 	help
 	  Enable this to support the UFS QMP PHY on various Qualcomm chipsets.
 
+config SPL_PHY_QCOM_QMP_UFS
+	bool "Qualcomm QMP UFS PHY driver in SPL"
+	depends on SPL_PHY && ARCH_SNAPDRAGON
+	help
+	  Enable this to support the UFS QMP PHY in SPL on various Qualcomm chipsets.
+	  This is required for UFS boot support in SPL.
+
 config PHY_QCOM_QUSB2
 	bool "Qualcomm USB QUSB2 PHY driver"
 	depends on PHY && ARCH_SNAPDRAGON
