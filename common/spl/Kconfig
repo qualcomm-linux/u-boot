@@ -1634,13 +1634,53 @@ config SPL_UFS_RAW_U_BOOT_DEVNUM
 	  SCSI device number, which might differ from the UFS LUN if you have
 	  multiple SCSI devices attached and recognized by the SPL.
 
-config SPL_UFS_RAW_U_BOOT_SECTOR
-	hex "Address on the UFS to load U-Boot from"
+choice
+	prompt "Method for locating U-Boot on UFS"
 	depends on SPL_UFS
-	default 0x800 if ARCH_ROCKCHIP
+	default SPL_UFS_RAW_U_BOOT_USE_SECTOR
+
+config SPL_UFS_RAW_U_BOOT_USE_SECTOR
+	bool "UFS raw mode: by sector"
 	help
-	  Address on the block device to load U-Boot from.
+	  Use absolute sector number for specifying U-Boot location on UFS LUN.
+	  When selected, SPL_UFS_RAW_U_BOOT_SECTOR specifies the sector offset.
+
+config SPL_UFS_RAW_U_BOOT_USE_PARTITION
+	bool "UFS raw mode: by partition"
+	select SPL_LIBDISK_SUPPORT
+	help
+	  Use a partition for loading U-Boot when using UFS in raw mode.
+	  You can specify either a partition name or partition number.
+
+endchoice
+
+config SPL_UFS_RAW_U_BOOT_SECTOR
+	hex "Sector offset to load U-Boot from in UFS raw mode"
+	depends on SPL_UFS_RAW_U_BOOT_USE_SECTOR
+	default 0x800 if ARCH_ROCKCHIP
+	default 0x0
+	help
+	  Absolute sector offset on the UFS LUN to load U-Boot from.
 	  Units: UFS sectors (1 sector = 4096 bytes).
+	  Note: Setting this to 0x0 will load from the start of the LUN.
+
+config SPL_UFS_RAW_U_BOOT_PARTITION_NAME
+	string "Partition name to load U-Boot from"
+	depends on SPL_UFS_RAW_U_BOOT_USE_PARTITION
+	help
+	  Name of the partition to load U-Boot from in UFS raw mode.
+	  This is tried before partition number lookup.
+	  Leave empty to skip name-based lookup.
+	  Example: "boot", "uefi", "dtb_a"
+
+config SPL_UFS_RAW_U_BOOT_PARTITION_NUM
+	int "Partition number to load U-Boot from"
+	depends on SPL_UFS_RAW_U_BOOT_USE_PARTITION
+	default 1
+	help
+	  Partition number to load U-Boot from when using UFS raw mode
+	  with partition support. This is used if partition name is not
+	  specified or not found.
 
 config SPL_WATCHDOG
 	bool "Support watchdog drivers"
