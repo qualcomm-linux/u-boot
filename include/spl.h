@@ -29,6 +29,10 @@ struct legacy_img_hdr;
 #define MMCSD_MODE_FS		2
 #define MMCSD_MODE_EMMCBOOT	3
 
+/* UFS boot modes */
+#define UFS_MODE_RAW		1
+#define UFS_MODE_FS		2
+
 struct blk_desc;
 struct legacy_img_hdr;
 struct spl_boot_device;
