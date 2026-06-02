@@ -78,8 +78,8 @@ config UFS_ROCKCHIP
 	depends on UFS
 	depends on DM_GPIO
 	depends on RESET_ROCKCHIP
-	depends on SPL_DM_GPIO || !SPL_UFS_SUPPORT
-	depends on SPL_RESET_ROCKCHIP || !SPL_UFS_SUPPORT
+	depends on SPL_DM_GPIO || !SPL_UFS
+	depends on SPL_RESET_ROCKCHIP || !SPL_UFS
 	help
 	  This selects the Rockchip specific additions to UFSHCD platform driver.
 
