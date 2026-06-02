@@ -1613,9 +1613,8 @@ config SPL_THERMAL
 	  automatic power-off when the temperature gets too high or low. Other
 	  devices may be discrete but connected on a suitable bus.
 
-config SPL_UFS_SUPPORT
+config SPL_UFS
 	bool "Support loading from UFS"
-	depends on UFS
 	select SPL_LOAD_BLOCK
 	help
 	  Enable support for UFS in SPL. This allows
@@ -1624,7 +1623,7 @@ config SPL_UFS_SUPPORT
 
 config SPL_UFS_RAW_U_BOOT_DEVNUM
 	int "SCSI device number of the UFS device to load U-Boot from"
-	depends on SPL_UFS_SUPPORT
+	depends on SPL_UFS
 	default 0
 	help
 	  UFS devices are usually configured with multiple LUNs, which present
@@ -1637,7 +1636,7 @@ config SPL_UFS_RAW_U_BOOT_DEVNUM
 
 config SPL_UFS_RAW_U_BOOT_SECTOR
 	hex "Address on the UFS to load U-Boot from"
-	depends on SPL_UFS_SUPPORT
+	depends on SPL_UFS
 	default 0x800 if ARCH_ROCKCHIP
 	help
 	  Address on the block device to load U-Boot from.
