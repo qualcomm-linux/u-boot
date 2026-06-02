@@ -16,7 +16,7 @@ ifdef CONFIG_XPL_BUILD
 ifdef CONFIG_SPL_SATA
 obj-$(CONFIG_SCSI) += scsi.o scsi-uclass.o
 endif
-ifdef CONFIG_SPL_UFS_SUPPORT
+ifdef CONFIG_SPL_UFS
 obj-$(CONFIG_SCSI) += scsi.o scsi-uclass.o
 endif
 endif
