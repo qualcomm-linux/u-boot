@@ -50,6 +50,20 @@ config QCOM_FIT_MULTIDTB
 	  This allows U-Boot to select the appropriate device tree
 	  from a FIT image.
 
+config SPL_QCOM_BOOT_FROM_PBL
+	bool "U-Boot SPL is loaded directly by PBL"
+	depends on SPL
+	default y
+	help
+	  Enable this option when U-Boot SPL is loaded directly by PBL (Primary
+	  Boot Loader). In this case, PBL passes boot parameters via r0 register
+	  containing a pointer to pbl_shared_data structure.
+	  
+	  Disable this option when U-Boot SPL is loaded by XBL or another
+	  intermediate bootloader (e.g., PBL->XBL->U-Boot SPL). In such cases,
+	  the r0 register won't contain valid PBL shared data, and boot device
+	  detection will use fallback mechanisms.
+
 choice
 	prompt "Qualcomm boot0.h workaround"
 	optional
