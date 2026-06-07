@@ -11,7 +11,7 @@
 #include <asm/io.h>
 #include <asm/system.h>
 #include <asm/sections.h>
-#include <smem.h>
+#include <soc/qcom/smem.h>
 #include <atf_common.h>
 #include <linux/err.h>
 #include <dm/device-internal.h>
@@ -37,6 +37,8 @@ DECLARE_GLOBAL_DATA_PTR;
 #define IF_TABLE_VERSION		0x1
 #define QCCONFIG			"qc_config"
 #define QCSDI				"qcsdi"
+
+struct mm_region *mem_map = NULL;
 
 /**
  * struct interface_table_entry - Meta data for blobs in QCLIB interface
@@ -605,19 +607,22 @@ static struct pbl_shared_data g_psd __section(".data");
 void save_boot_params(ulong r0, ulong r1, ulong r2, ulong r3)
 {
 	unsigned long sctlr;
-	struct pbl_shared_data *psd;
 
 	sctlr = get_sctlr();
 	set_sctlr(sctlr & ~(CR_M));	/* Disable MMU */
 
-	psd = (struct pbl_shared_data *)r0;
+	/*
+	 * When U-Boot SPL is loaded directly by PBL, r0 contains a pointer
+	 * to pbl_shared_data structure. When loaded via XBL or another
+	 * intermediate bootloader, r0 won't contain valid PBL data.
+	 */
+	if (CONFIG_IS_ENABLED(QCOM_BOOT_FROM_PBL)) {
+		struct pbl_shared_data *psd = (struct pbl_shared_data *)r0;
 
-	if (!psd || psd->num_of_entries < PBL_SHARED_DATA_PARAM_MAX)
-		goto out;
+		if (psd && psd->num_of_entries >= PBL_SHARED_DATA_PARAM_MAX)
+			memcpy(&g_psd, psd, sizeof(g_psd));
+	}
 
-	memcpy(&g_psd, psd, sizeof(g_psd));
-
-out:
 	save_boot_params_ret();
 }
 
@@ -631,35 +636,49 @@ u32 spl_boot_device(void)
 {
 	struct pbl_shared_data *psd = &g_psd;
 
+	/*
+	 * When booted directly from PBL, use PBL shared data to determine
+	 * boot device. When booted via XBL, fall back to compile-time config.
+	 */
+	if (CONFIG_IS_ENABLED(QCOM_BOOT_FROM_PBL)) {
 #ifdef DEBUG
-	for (int i  = 0; psd && i < psd->num_of_entries; i++) {
-		printf("entry[0x%x] = %d 0x%08x %d\n", i,
-		       psd->entry[i].param_id, psd->entry[i].value,
-		       psd->entry[i].valid);
-	}
+		for (int i  = 0; psd && i < psd->num_of_entries; i++) {
+			printf("entry[0x%x] = %d 0x%08x %d\n", i,
+			       psd->entry[i].param_id, psd->entry[i].value,
+			       psd->entry[i].valid);
+		}
 #endif
 
-	if (psd->entry[PSD_ID_IS_EDL_MODE].valid &&
-	    psd->entry[PSD_ID_IS_EDL_MODE].value) {
-		printf("Selected boot device: DFU\n");
-		return BOOT_DEVICE_DFU;
+		if (psd->entry[PSD_ID_IS_EDL_MODE].valid &&
+		    psd->entry[PSD_ID_IS_EDL_MODE].value) {
+			printf("Selected boot device: DFU\n");
+			return BOOT_DEVICE_DFU;
+		}
+
+		if (psd->entry[PSD_ID_BOOT_MEDIA_TYPE].valid) {
+			switch (psd->entry[PSD_ID_BOOT_MEDIA_TYPE].value) {
+			case PSD_MMC_FLASH:
+				printf("Selected boot device: MMC\n");
+				return BOOT_DEVICE_MMC1;
+			case PSD_NOR_FLASH:
+				printf("Selected boot device: NOR\n");
+				return BOOT_DEVICE_NOR;
+			case PSD_NAND_FLASH:
+				printf("Selected boot device: NAND\n");
+				return BOOT_DEVICE_NAND;
+			case PSD_UFS_FLASH:
+				printf("Selected boot device: UFS\n");
+				return BOOT_DEVICE_UFS;
+			}
+		}
 	}
 
-	if (psd->entry[PSD_ID_BOOT_MEDIA_TYPE].valid) {
-		switch (psd->entry[PSD_ID_BOOT_MEDIA_TYPE].value) {
-		case PSD_MMC_FLASH:
-			printf("Selected boot device: MMC\n");
-			return BOOT_DEVICE_MMC1;
-		case PSD_NOR_FLASH:
-			printf("Selected boot device: NOR\n");
-			return BOOT_DEVICE_NOR;
-		case PSD_NAND_FLASH:
-			printf("Selected boot device: NAND\n");
-			return BOOT_DEVICE_NAND;
-		case PSD_UFS_FLASH:
-			printf("Selected boot device: UFS\n");
-			return BOOT_DEVICE_UFS;
-		}
+	/*
+	 * Fallback: Use UFS when PBL shared data is not available
+	 */
+	if (IS_ENABLED(CONFIG_SPL_UFS_QCOM)) {
+		printf("Selected boot device: UFS\n");
+		return BOOT_DEVICE_UFS;
 	}
 
 	pr_err("No boot device configured\n");
@@ -687,16 +706,18 @@ void board_init_f(ulong dummy)
 
 	preloader_console_init();
 
-	ret = qcom_spl_loader_pre_ddr(spl_boot_device());
-	if (ret) {
-		pr_debug("qcom_spl_loader_pre_ddr() failed (%d)\n", ret);
-		goto fail;
-	}
+	if (CONFIG_IS_ENABLED(QCOM_BOOT_FROM_PBL)) {
+		ret = qcom_spl_loader_pre_ddr(spl_boot_device());
+		if (ret) {
+			pr_debug("qcom_spl_loader_pre_ddr() failed (%d)\n", ret);
+			goto fail;
+		}
 
-	ret = qclib_post_process_from_spl();
-	if (ret) {
-		pr_debug("qclib_post_process_from_spl() failed (%d)\n", ret);
-		goto fail;
+		ret = qclib_post_process_from_spl();
+		if (ret) {
+			pr_debug("qclib_post_process_from_spl() failed (%d)\n", ret);
+			goto fail;
+		}
 	}
 
 	board_init_r(NULL, 0);
