@@ -33,4 +33,11 @@ config QCOM_SMEM
 	  the hardware (e.g. DRAM layout, PMIC configuration, etc) between bootloader
 	  staged and the OS. If in doubt, say y.
 
+config SPL_QCOM_SMEM
+	bool "Qualcomm SMEM support in SPL"
+	help
+	  Say y here to support the Qualcomm SMEM (shared memory) client driver in SPL.
+	  SMEM is a shared memory region that is used to pass information about
+	  the hardware (e.g. DRAM layout, PMIC configuration, etc) between bootloader
+	  staged and the OS. If in doubt, say y.
 endif # SOC_QCOM
