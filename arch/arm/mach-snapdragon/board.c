@@ -52,6 +52,9 @@ static void show_psci_version(void)
 {
 	struct arm_smccc_res res;
 
+	if (!IS_ENABLED(CONFIG_ARM_SMCCC))
+		return;
+
 	arm_smccc_smc(ARM_PSCI_0_2_FN_PSCI_VERSION, 0, 0, 0, 0, 0, 0, 0, &res);
 
 	/* Some older SoCs like MSM8916 don't always support PSCI */
@@ -74,6 +77,9 @@ static void qcom_psci_fixup(void *fdt)
 {
 	int offset, ret;
 	struct arm_smccc_res res;
+
+	if (!IS_ENABLED(CONFIG_ARM_SMCCC))
+		return;
 
 	arm_smccc_smc(ARM_PSCI_0_2_FN_PSCI_VERSION, 0, 0, 0, 0, 0, 0, 0, &res);
 
