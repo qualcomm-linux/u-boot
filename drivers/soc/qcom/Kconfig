@@ -18,6 +18,24 @@ config QCOM_COMMAND_DB
 	  resource on a RPM-hardened platform must use this database to get
 	  SoC specific identifier and information for the shared resources.
 
+config QCOM_COMMAND_DB_OPTIONAL
+	bool "Allow operation without Command DB data"
+	depends on QCOM_COMMAND_DB
+	help
+	  Allow the Command DB driver to bind successfully even when CMD DB
+	  data is not populated or has an invalid magic number.
+
+	  This is useful for platforms where CMD DB is not populated by the
+	  previous bootloader (e.g., snagboot mode where XBL loads U-Boot
+	  directly without initializing CMD DB).
+
+	  When enabled, missing CMD DB will generate warnings but allow boot
+	  to continue. Consumer drivers must handle cmd_db API failures
+	  gracefully by checking return values.
+
+	  If unsure, say N. Most production Qualcomm platforms require
+	  valid CMD DB data.
+
 config QCOM_RPMH
 	bool "Qualcomm RPMh support"
 	depends on QCOM_COMMAND_DB
