@@ -521,6 +521,11 @@ dtb-$(CONFIG_TARGET_TEN64) += fsl-ls1088a-ten64.dtb
 
 dtb-$(CONFIG_TARGET_STEMMY) += ste-ux500-samsung-stemmy.dtb
 
+dtb-$(CONFIG_ARCH_SNAPDRAGON) += \
+        shikra-cqm-evk.dtb \
+        shikra-cqs-evk.dtb \
+        shikra-iqs-evk.dtb
+
 dtb-$(CONFIG_MACH_SUN4I) += \
 	sun4i-a10-inet-3f.dtb \
 	sun4i-a10-inet-3w.dtb
