@@ -85,6 +85,7 @@ config QCOM_EL2_GUNYAH_EXIT_SUPPORT
 	  Exit Gunyah hypervisor and switch to EL2 during early boot. This must
 	  happen before EL register configuration in start.S so that U-Boot can
 	  run properly at EL2.
+
 endchoice
 
 config SPL_WRAPPER_ELF
@@ -94,4 +95,34 @@ config SPL_WRAPPER_ELF
 	  Some platforms embed the U-Boot SPL binary within an ELF as a segment.
 	  Additional tools are used to convert this ELF into an image that is
 	  usable for the boot ROM.
+
+config QCOM_BOOT0_SNAGBOOT_MODE
+	bool "boot0.h initialization for Snagboot mode"
+	help
+	  Enable boot0.h early initialization required when U-Boot
+	  is loaded in Snagboot mode by XBL.
+
+config QCOM_SNAGBOOT_MODE
+	bool "Build U-Boot for Snagboot mode loading"
+	select QCOM_BOOT0_SNAGBOOT_MODE
+	select ENABLE_ARM_SOC_BOOT0_HOOK
+	select SKIP_RELOCATE
+	help
+	  Build U-Boot to be loaded in Snagboot mode on Qualcomm platforms
+	  for device/factory provisioning using fastboot.
+
+	  Snagboot mode requires disabling several configs in your defconfig:
+	  - PSCI_RESET: Not available in Snagboot mode
+	  - IOMMU: Not initialized by XBL in Snagboot mode
+	  - SAVE_PREV_BL_INITRAMFS_START_ADDR: Previous bootloader context
+	    is not preserved in snagboot mode
+	  - REBOOT_MODE_ENV_UPDATE: Not applicable in device/factory provisioning mode
+
+	  Additionally, use CONFIG_ENV_IS_NOWHERE to ensure recovery works
+	  even with corrupted environment storage.
+
+	  Platform-specific requirements:
+	  - Set CONFIG_COUNTER_FREQUENCY to match your platform's timer
+	  - Configure CONFIG_TEXT_BASE for U-Boot load address
+
 endif
