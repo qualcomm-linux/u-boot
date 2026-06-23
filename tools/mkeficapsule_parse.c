@@ -296,6 +296,63 @@ static void params_dependency_check(struct efi_capsule_params *params)
 	}
 }
 
+#define MAX_CAPSULE_GROUPS 32
+
+struct capsule_group {
+	char *capsule_filename;
+	struct efi_capsule_params_array params_array;
+};
+
+static struct capsule_group groups[MAX_CAPSULE_GROUPS];
+static int group_count;
+
+static struct capsule_group *find_or_create_group(const char *capsule_filename)
+{
+	int i;
+
+	/* Search for existing group */
+	for (i = 0; i < group_count; i++) {
+		if (groups[i].capsule_filename &&
+		    !strcmp(groups[i].capsule_filename, capsule_filename)) {
+			return &groups[i];
+		}
+	}
+
+	/* Create new group */
+	if (group_count >= MAX_CAPSULE_GROUPS) {
+		fprintf(stderr, "Too many capsule groups (max %d)\n",
+			MAX_CAPSULE_GROUPS);
+		exit(EXIT_FAILURE);
+	}
+
+	groups[group_count].capsule_filename = strdup(capsule_filename);
+	if (!groups[group_count].capsule_filename)
+		print_and_exit(MALLOC_FAIL_STR);
+
+	groups[group_count].params_array.count = 0;
+	return &groups[group_count++];
+}
+
+static void add_to_group(struct capsule_group *group,
+			 struct efi_capsule_params *params)
+{
+	struct efi_capsule_params *new_params;
+
+	if (group->params_array.count >= MAX_PAYLOADS_PER_CAPSULE) {
+		fprintf(stderr, "Too many payloads for capsule %s (max %d)\n",
+			group->capsule_filename, MAX_PAYLOADS_PER_CAPSULE);
+		exit(EXIT_FAILURE);
+	}
+
+	/* Allocate and copy params */
+	new_params = malloc(sizeof(struct efi_capsule_params));
+	if (!new_params)
+		print_and_exit(MALLOC_FAIL_STR);
+
+	memcpy(new_params, params, sizeof(struct efi_capsule_params));
+	group->params_array.params[group->params_array.count++] = new_params;
+}
+
 static void generate_capsule(struct efi_capsule_params *params)
 {
 	if (params->capsule != CAPSULE_NORMAL_BLOB) {
@@ -321,7 +378,8 @@ static void generate_capsule(struct efi_capsule_params *params)
  * @cfg_file: Path to the config file
  *
  * Parse the capsule parameters from the config file and use the
- * parameters for generating one or more capsules.
+ * parameters for generating one or more capsules. Payloads with the
+ * same capsule filename are grouped into a single multi-payload capsule.
  *
  * Return: None
  *
@@ -330,6 +388,8 @@ void capsule_with_cfg_file(const char *cfg_file)
 {
 	FILE *fp;
 	struct efi_capsule_params params = { 0 };
+	struct capsule_group *group;
+	int i;
 
 	fp = fopen(cfg_file, "r");
 	if (!fp) {
@@ -340,11 +400,62 @@ void capsule_with_cfg_file(const char *cfg_file)
 
 	params_start = 0;
 	params_end = 1;
+	group_count = 0;
 
+	/* Phase 1: Parse all payloads and group by capsule filename */
 	while (parse_capsule_payload_params(fp, &params) != -1) {
 		params_dependency_check(&params);
-		generate_capsule(&params);
+
+		/* Find or create group for this capsule */
+		group = find_or_create_group(params.capsule_file);
+		add_to_group(group, &params);
 
 		memset(&params, 0, sizeof(struct efi_capsule_params));
+	}
+
+	fclose(fp);
+
+	/* Phase 2: Generate capsules */
+	for (i = 0; i < group_count; i++) {
+		group = &groups[i];
+
+		/* Check if all payloads in group are normal blobs */
+		int all_normal = 1;
+		int j;
+
+		for (j = 0; j < group->params_array.count; j++) {
+			if (group->params_array.params[j]->capsule != CAPSULE_NORMAL_BLOB) {
+				all_normal = 0;
+				break;
+			}
+		}
+
+		if (group->params_array.count == 1) {
+			/* Single payload - use existing function */
+			printf("Generating single-payload capsule: %s\n",
+			       group->capsule_filename);
+			generate_capsule(group->params_array.params[0]);
+		} else if (all_normal) {
+			/* Multiple normal payloads - use multi-payload function */
+			printf("Generating multi-payload capsule: %s (%d payloads)\n",
+			       group->capsule_filename, group->params_array.count);
+			if (create_multi_payload_fwbin(group->capsule_filename,
+						       &group->params_array) < 0) {
+				print_and_exit("Creating multi-payload capsule failed\n");
+			}
+		} else {
+			/* Mixed or non-normal capsules - generate separately */
+			fprintf(stderr, "Warning: Cannot combine non-normal capsules. ");
+			fprintf(stderr, "Generating separate capsules for %s\n",
+				group->capsule_filename);
+			for (j = 0; j < group->params_array.count; j++) {
+				char temp_name[256];
+
+				snprintf(temp_name, sizeof(temp_name), "%s.%d",
+					 group->capsule_filename, j);
+				group->params_array.params[j]->capsule_file = temp_name;
+				generate_capsule(group->params_array.params[j]);
+			}
+		}
 	}
 }
