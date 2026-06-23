@@ -725,6 +725,180 @@ static void print_guid(void *ptr)
 	printf("%s\n", buf);
 }
 
+/**
+ * create_multi_payload_fwbin - create a multi-payload uefi capsule file
+ * @path:	Path to a created capsule file
+ * @params_array: Array of capsule parameters for multiple payloads
+ *
+ * This function creates a UEFI capsule file with multiple payloads.
+ * All payloads must be normal blob type capsules.
+ *
+ * Return:
+ * * 0  - on success
+ * * -1 - on failure
+ */
+int create_multi_payload_fwbin(char *path,
+			       struct efi_capsule_params_array *params_array)
+{
+	struct efi_capsule_header header;
+	struct efi_firmware_management_capsule_header capsule;
+	struct efi_firmware_management_capsule_image_header *image_headers;
+	FILE *f = NULL;
+	uint8_t **payload_data = NULL;
+	off_t *payload_sizes = NULL;
+	uint64_t *offsets = NULL;
+	uint64_t offset;
+	size_t capsule_size;
+	int i, ret = -1;
+	struct fmp_payload_header payload_header;
+
+	/* Validate all payloads are normal blobs */
+	for (i = 0; i < params_array->count; i++) {
+		if (params_array->params[i]->capsule != CAPSULE_NORMAL_BLOB) {
+			fprintf(stderr, "Multi-payload capsules only support normal blob type\n");
+			return -1;
+		}
+		if (params_array->params[i]->privkey_file || params_array->params[i]->cert_file) {
+			fprintf(stderr, "Multi-payload capsules do not support signing yet\n");
+			return -1;
+		}
+	}
+
+	/* Allocate arrays for payload data */
+	payload_data = calloc(params_array->count, sizeof(uint8_t *));
+	payload_sizes = calloc(params_array->count, sizeof(off_t));
+	image_headers = calloc(params_array->count, sizeof(*image_headers));
+	offsets = calloc(params_array->count, sizeof(uint64_t));
+
+	if (!payload_data || !payload_sizes || !image_headers || !offsets) {
+		fprintf(stderr, "Failed to allocate memory for multi-payload capsule\n");
+		goto err;
+	}
+
+	/* Read all payload files */
+	for (i = 0; i < params_array->count; i++) {
+		struct efi_capsule_params *params = params_array->params[i];
+
+		if (read_bin_file(params->input_file, &payload_data[i], &payload_sizes[i])) {
+			fprintf(stderr, "Failed to read payload file: %s\n", params->input_file);
+			goto err;
+		}
+
+		/* Add FMP payload header if fw_version is specified */
+		if (params->fmp.have_header) {
+			uint8_t *new_data = malloc(payload_sizes[i] + sizeof(payload_header));
+
+			if (!new_data) {
+				fprintf(stderr, "Failed to allocate memory for FMP header\n");
+				goto err;
+			}
+
+			payload_header.signature = FMP_PAYLOAD_HDR_SIGNATURE;
+			payload_header.header_size = sizeof(payload_header);
+			payload_header.fw_version = params->fmp.fw_version;
+			payload_header.lowest_supported_version = 0;
+
+			memcpy(new_data, &payload_header, sizeof(payload_header));
+			memcpy(new_data + sizeof(payload_header), payload_data[i],
+			       payload_sizes[i]);
+
+			free(payload_data[i]);
+			payload_data[i] = new_data;
+			payload_sizes[i] += sizeof(payload_header);
+		}
+	}
+
+	/* Calculate offsets for each image */
+	offset = sizeof(capsule) + params_array->count * sizeof(uint64_t);
+	for (i = 0; i < params_array->count; i++) {
+		offsets[i] = offset;
+		offset += sizeof(image_headers[i]) + payload_sizes[i];
+	}
+
+	/* Calculate total capsule size */
+	capsule_size = sizeof(header) + offset;
+
+	/* Open output file */
+	f = fopen(path, "w");
+	if (!f) {
+		fprintf(stderr, "Cannot open %s\n", path);
+		goto err;
+	}
+
+	/* Write capsule header */
+	header.capsule_guid = efi_guid_fm_capsule;
+	header.header_size = sizeof(header);
+	header.flags = CAPSULE_FLAGS_PERSIST_ACROSS_RESET;
+	for (i = 0; i < params_array->count; i++)
+		header.flags |= params_array->params[i]->oemflags;
+	header.capsule_image_size = capsule_size;
+
+	if (write_capsule_file(f, &header, sizeof(header), "Capsule header"))
+		goto err;
+
+	/* Write firmware management capsule header */
+	capsule.version = 0x00000001;
+	capsule.embedded_driver_count = 0;
+	capsule.payload_item_count = params_array->count;
+
+	if (write_capsule_file(f, &capsule, sizeof(capsule), "FMP capsule header"))
+		goto err;
+
+	/* Write offset array */
+	for (i = 0; i < params_array->count; i++) {
+		if (write_capsule_file(f, &offsets[i], sizeof(uint64_t), "Image offset"))
+			goto err;
+	}
+
+	/* Write each image header and payload */
+	for (i = 0; i < params_array->count; i++) {
+		struct efi_capsule_params *params = params_array->params[i];
+
+		/* Prepare image header */
+		image_headers[i].version = 0x00000003;
+		memcpy(&image_headers[i].update_image_type_id, params->image_guid,
+		       sizeof(efi_guid_t));
+		image_headers[i].update_image_index = params->image_index;
+		image_headers[i].reserved[0] = 0;
+		image_headers[i].reserved[1] = 0;
+		image_headers[i].reserved[2] = 0;
+		image_headers[i].update_image_size = payload_sizes[i];
+		image_headers[i].update_vendor_code_size = 0;
+		image_headers[i].update_hardware_instance = params->hardware_instance;
+		image_headers[i].image_capsule_support = 0;
+
+		/* Write image header */
+		if (write_capsule_file(f, &image_headers[i], sizeof(image_headers[i]),
+				       "FMP image header"))
+			goto err;
+
+		/* Write payload */
+		if (write_capsule_file(f, payload_data[i], payload_sizes[i], "Payload data"))
+			goto err;
+	}
+
+	printf("Multi-payload capsule created successfully: %s\n", path);
+	printf("  Total size: %zu bytes\n", capsule_size);
+	printf("  Payloads: %d\n", params_array->count);
+	ret = 0;
+
+err:
+	if (f)
+		fclose(f);
+
+	if (payload_data) {
+		for (i = 0; i < params_array->count; i++)
+			free(payload_data[i]);
+		free(payload_data);
+	}
+
+	free(payload_sizes);
+	free(image_headers);
+	free(offsets);
+
+	return ret;
+}
+
 static uint32_t dump_fmp_payload_header(
 	struct fmp_payload_header *fmp_payload_hdr)
 {

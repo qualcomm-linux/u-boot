@@ -179,6 +179,18 @@ struct efi_capsule_params {
 	enum capsule_type capsule;
 };
 
+#define MAX_PAYLOADS_PER_CAPSULE 16
+
+/**
+ * struct efi_capsule_params_array - Array of capsule parameters
+ * @count: Number of parameters in the array
+ * @params: Array of pointers to capsule parameters
+ */
+struct efi_capsule_params_array {
+	int count;
+	struct efi_capsule_params *params[MAX_PAYLOADS_PER_CAPSULE];
+};
+
 /**
  * capsule_with_cfg_file() - Generate capsule from config file
  * @cfg_file: Path to the config file
@@ -234,6 +246,21 @@ int create_fwbin(char *path, char *bin, efi_guid_t *guid,
 		 struct fmp_payload_header_params *fmp_ph_params,
 		 uint64_t mcount, char *privkey_file, char *cert_file,
 		 uint16_t oemflags);
+
+/**
+ * create_multi_payload_fwbin - create a multi-payload uefi capsule file
+ * @path:	Path to a created capsule file
+ * @params_array: Array of capsule parameters for multiple payloads
+ *
+ * This function creates a UEFI capsule file with multiple payloads.
+ * All payloads must be normal blob type capsules.
+ *
+ * Return:
+ * * 0  - on success
+ * * -1 - on failure
+ */
+int create_multi_payload_fwbin(char *path,
+			       struct efi_capsule_params_array *params_array);
 
 /**
  * print_usage() - Print the command usage string
