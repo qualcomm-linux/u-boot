@@ -33,7 +33,6 @@
 #define QCOM_FIT_FILENAME	"qclinux_fit.img"
 #define QCOM_FIT_PARTNAME	"dtb_a"
 
-#define TCSR_SOC_HW_VERSION        0x01fc8000
 #define TCSR_MAJOR_VERSION_MASK    0x0000ff00
 #define TCSR_MAJOR_VERSION_SHIFT   8
 #define TCSR_MINOR_VERSION_MASK    0x000000ff
@@ -170,97 +169,77 @@ static int qcom_get_ddr_size_type(u32 *ddr_type)
 }
 
 /**
- * qcom_get_imem_address() - Look up shared IMEM cookie address for this SoC
+ * qcom_get_soc_info() - Look up SoC-specific register addresses
  *
  * Reads the root node compatible string from the device tree and searches
- * the qcom_imem_table for a matching entry.
+ * the qcom_soc_table for a matching entry.
  *
- * Return: Physical address of shared IMEM cookie, or 0 if not found
+ * Return: Pointer to qcom_soc_info structure, or NULL if not found
  */
-static uintptr_t qcom_get_imem_address(void)
+static const struct qcom_soc_info *qcom_get_soc_info(void)
 {
-	const struct qcom_imem_info *entry;
+	const struct qcom_soc_info *entry;
 	const char *soc_compat;
 	int len;
 
 	soc_compat = fdt_getprop(gd->fdt_blob, 0, "compatible", &len);
 	if (!soc_compat) {
 		log_warning("Cannot read SoC compatible from DT\n");
-		return 0;
+		return NULL;
 	}
 
-	for (entry = qcom_imem_table; entry->compatible; entry++) {
+	for (entry = qcom_soc_table; entry->compatible; entry++) {
 		if (fdt_stringlist_contains(soc_compat, len, entry->compatible))
-			return entry->shared_imem_addr;
+			return entry;
 	}
 
-	log_warning("SoC not found in IMEM table\n");
-	return 0;
+	log_warning("SoC not found in table\n");
+	return NULL;
 }
 
 /**
  * qcom_get_storage_type() - Detect storage type (UFS/EMMC/NAND)
+ * @shared_imem_addr: Physical address of the boot shared IMEM cookie
  *
  * Reads the boot device type from the shared IMEM cookie structure populated
- * by the bootloader. The shared IMEM address is looked up from a per-SoC
- * table (qcom_imem_table) using the device tree compatible string.
- *
- * Falls back to UFS if the SoC is not in the table or if the IMEM cookie
- * magic/version validation fails.
+ * by the bootloader.
  *
  * Return: mem_card_type enum value (UFS/EMMC/NAND), or UFS as fallback
  */
-static enum mem_card_type qcom_get_storage_type(void)
+static enum mem_card_type qcom_get_storage_type(uintptr_t shared_imem_addr)
 {
 	struct boot_imem_cookie *imem;
-	uintptr_t shared_imem_addr;
-
-	shared_imem_addr = qcom_get_imem_address();
-	if (!shared_imem_addr) {
-		log_warning("SoC not in IMEM table, defaulting to UFS\n");
-		return UFS;
-	}
 
 	imem = (struct boot_imem_cookie *)shared_imem_addr;
 
-	if (imem->shared_imem_magic != BOOT_SHARED_IMEM_MAGIC_NUM) {
-		log_warning("Invalid shared IMEM magic: 0x%x, defaulting to UFS\n",
-			    imem->shared_imem_magic);
+	if (imem->shared_imem_magic == BOOT_SHARED_IMEM_MAGIC_NUM &&
+	    imem->shared_imem_version >= BOOT_SHARED_IMEM_VERSION_NUM) {
+		log_info("Shared IMEM: magic=0x%x, version=%u, boot_device_type=%u\n",
+			 imem->shared_imem_magic, imem->shared_imem_version,
+			 imem->boot_device_type);
+
+		switch (imem->boot_device_type) {
+		case UFS_FLASH:
+			return UFS;
+		case MMC_FLASH:
+		case SDC_FLASH:
+			return EMMC;
+		case NAND_FLASH:
+			return NAND;
+		default:
+			log_warning("Unknown shared IMEM boot device: %u, defaulting to UFS\n",
+				    imem->boot_device_type);
+			return UFS;
+		}
+	} else {
+		if (imem->shared_imem_magic != BOOT_SHARED_IMEM_MAGIC_NUM)
+			log_warning("Invalid shared IMEM magic: 0x%x, defaulting to UFS\n",
+				    imem->shared_imem_magic);
+		else
+			log_warning("Invalid shared IMEM version: %u, defaulting to UFS\n",
+				    imem->shared_imem_version);
 		return UFS;
 	}
-
-	if (imem->shared_imem_version < BOOT_SHARED_IMEM_VERSION_NUM) {
-		log_warning("Invalid shared IMEM version: %u, defaulting to UFS\n",
-			    imem->shared_imem_version);
-		return UFS;
-	}
-
-	log_info("Shared IMEM: magic=0x%x, version=%u, boot_device_type=%u\n",
-		 imem->shared_imem_magic, imem->shared_imem_version,
-		 imem->boot_device_type);
-
-	switch (imem->boot_device_type) {
-	case UFS_FLASH:
-		return UFS;
-	case MMC_FLASH:
-	case SDC_FLASH:
-		return EMMC;
-	case NAND_FLASH:
-		return NAND;
-	default:
-		log_warning("Unknown shared IMEM boot device: %u, defaulting to UFS\n",
-			    imem->boot_device_type);
-		return UFS;
-	}
-}
-
-static u32 qcom_read_tcsr_soc_version(void)
-{
-	u32 reg_val = readl(TCSR_SOC_HW_VERSION);
-	u32 major = (reg_val & TCSR_MAJOR_VERSION_MASK) >> TCSR_MAJOR_VERSION_SHIFT;
-	u32 minor = (reg_val & TCSR_MINOR_VERSION_MASK) >> TCSR_MINOR_VERSION_SHIFT;
-
-	return (major << 4) | minor;
 }
 
 /**
@@ -274,12 +253,19 @@ static u32 qcom_read_tcsr_soc_version(void)
  */
 static int qcom_detect_hardware_params(struct qcom_hw_params *params)
 {
+	const struct qcom_soc_info *soc_tbl_info;
 	struct socinfo *soc_info;
 	size_t size;
 	int ret;
-	u32 raw_version;
+	u32 raw_version, reg_val, major, minor;
 
 	memset(params, 0, sizeof(*params));
+
+	soc_tbl_info = qcom_get_soc_info();
+	if (!soc_tbl_info) {
+		log_err("SoC not found in table\n");
+		return -ENODEV;
+	}
 
 	soc_info = qcom_smem_get(QCOM_SMEM_HOST_ANY, SMEM_HW_SW_BUILD_ID, &size);
 	if (IS_ERR_OR_NULL(soc_info)) {
@@ -292,7 +278,10 @@ static int qcom_detect_hardware_params(struct qcom_hw_params *params)
 	raw_version = le32_to_cpu(soc_info->plat_ver);
 	params->board_version = (SOCINFO_MAJOR(raw_version) << 4) | SOCINFO_MINOR(raw_version);
 
-	params->chip_version = qcom_read_tcsr_soc_version();
+	reg_val = readl(soc_tbl_info->tcsr_soc_hw_version_addr);
+	major = (reg_val & TCSR_MAJOR_VERSION_MASK) >> TCSR_MAJOR_VERSION_SHIFT;
+	minor = (reg_val & TCSR_MINOR_VERSION_MASK) >> TCSR_MINOR_VERSION_SHIFT;
+	params->chip_version = (major << 4) | minor;
 
 	params->platform = le32_to_cpu(soc_info->hw_plat);
 	params->subtype = le32_to_cpu(soc_info->hw_plat_subtype);
@@ -307,7 +296,7 @@ static int qcom_detect_hardware_params(struct qcom_hw_params *params)
 	if (ret)
 		log_warning("Failed to get DDR size, defaulting to 0\n");
 
-	params->storage_type = qcom_get_storage_type();
+	params->storage_type = qcom_get_storage_type(soc_tbl_info->shared_imem_addr);
 
 	log_info("Hardware Parameters:\n");
 	log_info("  Chip ID: 0x%x\n", params->chip_id);
