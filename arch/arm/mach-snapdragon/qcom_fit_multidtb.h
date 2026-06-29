@@ -64,31 +64,34 @@ enum boot_media_type {
 #define BOOT_SHARED_IMEM_VERSION_NUM  0x3
 
 /**
- * struct qcom_imem_info - SoC-specific shared IMEM cookie address mapping
+ * struct qcom_soc_info - SoC-specific register address mapping
  * @compatible: SoC compatible string (e.g., "qcom,qcs6490")
  * @shared_imem_addr: Physical address of the boot shared IMEM cookie
+ * @tcsr_soc_hw_version_addr: Physical address of TCSR SOC_HW_VERSION register
  *
  * The shared IMEM cookie is populated by the bootloader and contains
  * boot device type and other boot parameters. Its location varies per SoC
  * and is calculated as: SCL_IMEM_BASE + IMEM_SIZE - 0x1000 (4KB cookie).
+ * The TCSR SOC_HW_VERSION register address is TCSR_BASE + 0x8000.
  * Only SoCs with CONFIG_QCOM_FIT_MULTIDTB support are listed here.
  */
-struct qcom_imem_info {
+struct qcom_soc_info {
 	const char *compatible;
 	uintptr_t shared_imem_addr;
+	uintptr_t tcsr_soc_hw_version_addr;
 };
 
 /*
- * Per-SoC shared IMEM cookie address table.
- * Address = SCL_IMEM_BASE(0x14680000) + IMEM_SIZE - 0x1000
- *   QCM6490/QCS6490/QCS615: IMEM_SIZE=0x2B000 -> 0x146aa000
- *   QCS9100:                IMEM_SIZE=0x59000 -> 0x146d8000
+ * Per-SoC register address table.
+ * shared_imem_addr = SCL_IMEM_BASE + IMEM_SIZE - 0x1000
+ * tcsr_soc_hw_version_addr = TCSR_BASE + 0x8000
  */
-static const struct qcom_imem_info qcom_imem_table[] = {
-	{ "qcom,qcm6490", 0x146aa000 },
-	{ "qcom,qcs6490", 0x146aa000 },
-	{ "qcom,qcs615",  0x146aa000 },
-	{ "qcom,qcs9100", 0x146d8000 },
+static const struct qcom_soc_info qcom_soc_table[] = {
+	{ "qcom,qcm6490", 0x146aa000, 0x01fc8000 },
+	{ "qcom,qcs6490", 0x146aa000, 0x01fc8000 },
+	{ "qcom,qcs615",  0x146aa000, 0x01fc8000 },
+	{ "qcom,qcs9100", 0x146d8000, 0x01fc8000 },
+	{ "qcom,shikra",  0x0c11e000, 0x003c8000 },
 	{ }
 };
 
