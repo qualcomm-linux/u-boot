@@ -1,0 +1,172 @@
+/*
+ * ==========================================================================
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: ISC
+ * ==========================================================================
+ */
+
+/dts-v1/;
+
+/ {
+    description = "FIT Image for SPL";
+    #address-cells = <1>;
+
+    images {
+
+        /* ------------------------ */
+        /*  QC Config Segments      */
+        /* ------------------------ */
+        qcconfig_1 {
+            description = "qcconfig1";
+            data = /incbin/("./qcconfig_1_load_segment.bin");
+            type = "firmware";
+            arch = "arm64";
+            os = "elf";
+            load = <QCCONFIG_1_LOAD_ADDR>;
+            entry = <QCCONFIG_ENTRY_ADDR>;
+            compression = "none";
+        };
+
+        qcconfig_2 {
+            description = "qcconfig2";
+            data = /incbin/("./qcconfig_2_load_segment.bin");
+            type = "firmware";
+            arch = "arm64";
+            load = <QCCONFIG_2_LOAD_ADDR>;
+            compression = "none";
+        };
+
+        qcconfig_3 {
+            description = "qcconfig3";
+            data = /incbin/("./qcconfig_3_load_segment.bin");
+            type = "firmware";
+            arch = "arm64";
+            load = <QCCONFIG_3_LOAD_ADDR>;
+            compression = "none";
+        };
+
+        qcconfig_4 {
+            description = "qcconfig4";
+            data = /incbin/("./qcconfig_4_load_segment.bin");
+            type = "firmware";
+            arch = "arm64";
+            load = <QCCONFIG_4_LOAD_ADDR>;
+            compression = "none";
+        };
+
+        qcconfig-meta {
+            description = "qcconfig meta";
+            data = /incbin/("./qcconfig_meta_segments.bin");
+            type = "firmware";
+            arch = "arm64";
+            load = <META_LOAD_ADDR>;
+            entry = <QCCONFIG_ENTRY_ADDR>;
+            compression = "none";
+        };
+
+        /* ------------------------ */
+        /*  QC Lib Segments         */
+        /* ------------------------ */
+        qclib_1 {
+            description = "qclib1";
+            data = /incbin/("./qclib_1_load_segment.bin");
+            type = "firmware";
+            arch = "arm64";
+            os = "elf";
+            load = <QCLIB_1_LOAD_ADDR>;
+            entry = <QCLIB_ENTRY_ADDR>;
+            compression = "none";
+        };
+
+        qclib_2 {
+            description = "qclib2";
+            data = /incbin/("./qclib_2_load_segment.bin");
+            type = "firmware";
+            arch = "arm64";
+            load = <QCLIB_2_LOAD_ADDR>;
+            compression = "none";
+        };
+
+        qclib-meta {
+            description = "qclib meta";
+            data = /incbin/("./qclib_meta_segments.bin");
+            type = "firmware";
+            arch = "arm64";
+            load = <META_LOAD_ADDR>;
+            entry = <QCLIB_ENTRY_ADDR>;
+            compression = "none";
+        };
+
+        /* ------------------------ */
+        /*  BL31 (ARM Trusted FW)   */
+        /* ------------------------ */
+        tfa {
+            description = "ARM Trusted Firmware";
+            data = /incbin/("bl31.bin");
+            type = "firmware";
+            arch = "arm64";
+            os = "arm-trusted-firmware";
+            compression = "none";
+            load = <0x1c200000>;
+            entry = <0x1c200000>;
+
+            hash-1 {
+                algo = "sha256";
+            };
+        };
+
+        /* ------------------------ */
+        /*  BL32 (OP-TEE)           */
+        /* ------------------------ */
+        optee {
+            description = "OP-TEE Secure OS";
+            data = /incbin/("bl32.bin");
+            type = "tee";
+            arch = "arm64";
+            os = "tee";
+            compression = "none";
+            load = <0x1c300000>;
+            entry = <0x1c300000>;
+
+            hash-1 {
+                algo = "sha256";
+            };
+        };
+
+        /* ------------------------ */
+        /*  BL33 (U-Boot)           */
+        /* ------------------------ */
+        uboot {
+            description = "U-Boot Bootloader";
+            data = /incbin/("bl33.bin");
+            type = "standalone";
+            arch = "arm64";
+            os = "u-boot";
+            compression = "none";
+            load = <0xaf400000>;
+            entry = <0xaf400000>;
+
+            hash-1 {
+                algo = "sha256";
+            };
+        };
+    };
+
+    /* ---------------------------- */
+    /*  CONFIGURATION               */
+    /* ---------------------------- */
+    configurations {
+        default = "post-ddr";
+        pre-ddr-config {
+            description = "pre-ddr";
+            loadables =
+            "qcconfig_1", "qcconfig_2", "qcconfig_3", "qcconfig_4", "qcconfig-meta",
+            "qclib_1", "qclib_2", "qclib-meta"
+            ;
+        };
+        post-ddr-config {
+            description = "post-ddr";
+            loadables = "tfa", "uboot", "optee";
+        };
+    };
+};
