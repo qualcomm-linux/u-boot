@@ -524,7 +524,8 @@ static int msm_serial_probe(struct udevice *dev)
 		priv->se = clk;
 
 	/* Try enable clock */
-	clk_enable(clk);
+	if (!IS_ERR_OR_NULL(clk))
+		clk_enable(clk);
 
 	/* Check if firmware loading is needed (BT UART) */
 	proto = readl(priv->base + GENI_FW_REVISION_RO);
