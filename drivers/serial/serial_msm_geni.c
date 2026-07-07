@@ -483,15 +483,29 @@ static int msm_serial_getc(struct udevice *dev)
 static int msm_serial_pending(struct udevice *dev, bool input)
 {
 	struct msm_serial_data *priv = dev_get_priv(dev);
+	u32 fifo_status;
+	u32 s_irq_status;
+	int word_count;
 
-	if (input)
-		return readl(priv->base + SE_GENI_RX_FIFO_STATUS) &
-			   RX_FIFO_WC_MSK;
-	else
-		return readl(priv->base + SE_GENI_TX_FIFO_STATUS) &
-			   TX_FIFO_WC_MSK;
+	if (input) {
+		fifo_status = readl(priv->base + SE_GENI_RX_FIFO_STATUS);
+		word_count = fifo_status & RX_FIFO_WC_MSK;
 
-	return 0;
+		if (word_count > 0) {
+			/* Validate RX FIFO data with IRQ status */
+			s_irq_status = readl(priv->base + SE_GENI_S_IRQ_STATUS);
+
+			if (!(s_irq_status & (S_RX_FIFO_WATERMARK_EN | S_RX_FIFO_LAST_EN)))
+				return 0;
+		}
+
+		return word_count;
+	} else {
+		fifo_status = readl(priv->base + SE_GENI_TX_FIFO_STATUS);
+		word_count = fifo_status & TX_FIFO_WC_MSK;
+
+		return word_count;
+	}
 }
 
 static const struct dm_serial_ops msm_serial_ops = {
