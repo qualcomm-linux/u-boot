@@ -9,3 +9,4 @@ obj-$(CONFIG_OF_LIVE) += of_fixup.o
 obj-$(CONFIG_QCOM_FIT_MULTIDTB) += qcom_fit_multidtb.o
 endif
 obj-$(CONFIG_SPL_BUILD) += spl.o
+obj-$(CONFIG_SPL_BUILD) += fit-handler.o
