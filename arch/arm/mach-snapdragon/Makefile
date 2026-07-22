@@ -10,3 +10,4 @@ obj-$(CONFIG_QCOM_HWDETECT) += qcom_hwdetect.o
 obj-$(CONFIG_OF_LIVE) += of_fixup.o
 endif
 obj-$(CONFIG_SPL_BUILD) += spl.o
+obj-$(CONFIG_SPL_BUILD) += fit-handler.o
