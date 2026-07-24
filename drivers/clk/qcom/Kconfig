@@ -71,6 +71,15 @@ config CLK_QCOM_NORD
 	  on the Snapdragon Nord SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config CLK_QCOM_NORD_NEGCC
+	bool "Qualcomm Nord NEGCC"
+	select CLK_QCOM
+	help
+	  Say Y here to enable support for the North-East Global Clock
+	  Controller on the Snapdragon Nord SoC. This driver supports the
+	  UFS, USB, and QUPv3 clocks and resets exposed by the NEGCC
+	  hardware block.
+
 config CLK_QCOM_QCM2290
 	bool "Qualcomm QCM2290 GCC"
 	select CLK_QCOM
