@@ -89,6 +89,15 @@ config CLK_QCOM_NORD_SEGCC
 	  EMAC and QUPv3 clocks and resets exposed by the SEGCC hardware
 	  block.
 
+config CLK_QCOM_NORD_NWGCC
+	bool "Qualcomm Nord NWGCC"
+	select CLK_QCOM
+	help
+	  Say Y here to enable support for the North-West Global Clock
+	  Controller on the Snapdragon Nord SoC. This driver supports the
+	  camera, display, EVA, video, and GPU clocks and resets exposed by
+	  the NWGCC hardware block.
+
 config CLK_QCOM_QCM2290
 	bool "Qualcomm QCM2290 GCC"
 	select CLK_QCOM
