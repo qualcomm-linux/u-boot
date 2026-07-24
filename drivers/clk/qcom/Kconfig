@@ -80,6 +80,15 @@ config CLK_QCOM_NORD_NEGCC
 	  UFS, USB, and QUPv3 clocks and resets exposed by the NEGCC
 	  hardware block.
 
+config CLK_QCOM_NORD_SEGCC
+	bool "Qualcomm Nord SEGCC"
+	select CLK_QCOM
+	help
+	  Say Y here to enable support for the South-East Global Clock
+	  Controller on the Snapdragon Nord SoC. This driver supports the
+	  EMAC and QUPv3 clocks and resets exposed by the SEGCC hardware
+	  block.
+
 config CLK_QCOM_QCM2290
 	bool "Qualcomm QCM2290 GCC"
 	select CLK_QCOM
