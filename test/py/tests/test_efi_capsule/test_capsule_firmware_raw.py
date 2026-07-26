@@ -305,3 +305,39 @@ class TestEfiCapsuleFirmwareRaw:
             # dfu_alt_info and the write would fail, leaving content 'Old'.
             expected = 'u-boot:Old' if capsule_auth else 'u-boot:New'
             verify_content(ubman, '100000', expected)
+
+    def test_efi_capsule_fw8(
+            self, u_boot_config, ubman, efi_capsule_data):
+        """ Test Case 8
+        Update U-Boot and U-Boot environment on SPI Flash using a single
+        multi-payload capsule, raw image format
+        0x100000-0x150000: U-Boot binary (but dummy)
+        0x150000-0x200000: U-Boot environment (but dummy)
+        """
+        disk_img = efi_capsule_data
+        capsule_files = ['Test07']
+        with ubman.log.section('Test Case 8-a, before reboot'):
+            capsule_setup(ubman, disk_img, '0x0000000000000004')
+            init_content(ubman, '100000', 'u-boot.bin.old', 'Old')
+            init_content(ubman, '150000', 'u-boot.env.old', 'Old')
+            place_capsule_file(ubman, capsule_files)
+
+        capsule_early = u_boot_config.buildconfig.get(
+            'config_efi_capsule_on_disk_early')
+        capsule_auth = u_boot_config.buildconfig.get(
+            'config_efi_capsule_authenticate')
+
+        # reboot
+        ubman.restart_uboot(expect_reset = capsule_early)
+
+        with ubman.log.section('Test Case 8-b, after reboot'):
+            if not capsule_early:
+                exec_manual_update(ubman, disk_img, capsule_files)
+
+            check_file_removed(ubman, disk_img, capsule_files)
+
+            expected = 'u-boot:Old' if capsule_auth else 'u-boot:New'
+            verify_content(ubman, '100000', expected)
+
+            expected = 'u-boot-env:Old' if capsule_auth else 'u-boot-env:New'
+            verify_content(ubman, '150000', expected)

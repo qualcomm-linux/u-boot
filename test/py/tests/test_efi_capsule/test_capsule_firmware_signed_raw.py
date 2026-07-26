@@ -190,3 +190,36 @@ class TestEfiCapsuleFirmwareSignedRaw():
             check_file_removed(ubman, disk_img, capsule_files)
 
             verify_content(ubman, '100000', 'u-boot:Old')
+
+    def test_efi_capsule_auth8(
+            self, u_boot_config, ubman, efi_capsule_data):
+        """Test Case 8 - Update U-Boot and U-Boot environment on SPI
+        Flash using a single signed multi-payload capsule, raw image
+        format
+        0x100000-0x150000: U-Boot binary (but dummy)
+        0x150000-0x200000: U-Boot environment (but dummy)
+
+        Each payload in the multi-payload capsule is signed
+        independently. If both signatures are valid, the authentication
+        should pass and both firmware images should be updated.
+        """
+        disk_img = efi_capsule_data
+        capsule_files = ['Test15']
+        with ubman.log.section('Test Case 8-a, before reboot'):
+            capsule_setup(ubman, disk_img, '0x0000000000000004')
+            init_content(ubman, '100000', 'u-boot.bin.old', 'Old')
+            init_content(ubman, '150000', 'u-boot.env.old', 'Old')
+            place_capsule_file(ubman, capsule_files)
+
+        do_reboot_dtb_specified(u_boot_config, ubman, 'test_sig.dtb')
+
+        capsule_early = u_boot_config.buildconfig.get(
+            'config_efi_capsule_on_disk_early')
+        with ubman.log.section('Test Case 8-b, after reboot'):
+            if not capsule_early:
+                exec_manual_update(ubman, disk_img, capsule_files)
+
+            check_file_removed(ubman, disk_img, capsule_files)
+
+            verify_content(ubman, '100000', 'u-boot:New')
+            verify_content(ubman, '150000', 'u-boot-env:New')
