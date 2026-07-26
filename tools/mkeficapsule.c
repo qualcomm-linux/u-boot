@@ -731,7 +731,9 @@ static void print_guid(void *ptr)
  * @params_array: Array of capsule parameters for multiple payloads
  *
  * This function creates a UEFI capsule file with multiple payloads.
- * All payloads must be normal blob type capsules.
+ * All payloads must be normal blob type capsules. Each payload may
+ * optionally be signed independently by specifying a private key and
+ * certificate file in its capsule parameters.
  *
  * Return:
  * * 0  - on success
@@ -743,6 +745,7 @@ int create_multi_payload_fwbin(char *path,
 	struct efi_capsule_header header;
 	struct efi_firmware_management_capsule_header capsule;
 	struct efi_firmware_management_capsule_image_header *image_headers;
+	struct auth_context *auth_contexts;
 	FILE *f = NULL;
 	uint8_t **payload_data = NULL;
 	off_t *payload_sizes = NULL;
@@ -758,10 +761,6 @@ int create_multi_payload_fwbin(char *path,
 			fprintf(stderr, "Multi-payload capsules only support normal blob type\n");
 			return -1;
 		}
-		if (params_array->params[i]->privkey_file || params_array->params[i]->cert_file) {
-			fprintf(stderr, "Multi-payload capsules do not support signing yet\n");
-			return -1;
-		}
 	}
 
 	/* Allocate arrays for payload data */
@@ -769,8 +768,10 @@ int create_multi_payload_fwbin(char *path,
 	payload_sizes = calloc(params_array->count, sizeof(off_t));
 	image_headers = calloc(params_array->count, sizeof(*image_headers));
 	offsets = calloc(params_array->count, sizeof(uint64_t));
+	auth_contexts = calloc(params_array->count, sizeof(*auth_contexts));
 
-	if (!payload_data || !payload_sizes || !image_headers || !offsets) {
+	if (!payload_data || !payload_sizes || !image_headers || !offsets ||
+	    !auth_contexts) {
 		fprintf(stderr, "Failed to allocate memory for multi-payload capsule\n");
 		goto err;
 	}
@@ -806,6 +807,21 @@ int create_multi_payload_fwbin(char *path,
 			payload_data[i] = new_data;
 			payload_sizes[i] += sizeof(payload_header);
 		}
+
+		/* Sign the payload if a private key and certificate are given */
+		if (params->privkey_file && params->cert_file) {
+			auth_contexts[i].key_file = params->privkey_file;
+			auth_contexts[i].cert_file = params->cert_file;
+			auth_contexts[i].auth.monotonic_count = params->monotonic_count;
+			auth_contexts[i].image_data = payload_data[i];
+			auth_contexts[i].image_size = payload_sizes[i];
+
+			if (create_auth_data(&auth_contexts[i])) {
+				fprintf(stderr, "Signing payload %s failed\n",
+					params->input_file);
+				goto err;
+			}
+		}
 	}
 
 	/* Calculate offsets for each image */
@@ -813,6 +829,8 @@ int create_multi_payload_fwbin(char *path,
 	for (i = 0; i < params_array->count; i++) {
 		offsets[i] = offset;
 		offset += sizeof(image_headers[i]) + payload_sizes[i];
+		if (auth_contexts[i].sig_size)
+			offset += sizeof(auth_contexts[i].auth) + auth_contexts[i].sig_size;
 	}
 
 	/* Calculate total capsule size */
@@ -866,11 +884,28 @@ int create_multi_payload_fwbin(char *path,
 		image_headers[i].update_vendor_code_size = 0;
 		image_headers[i].update_hardware_instance = params->hardware_instance;
 		image_headers[i].image_capsule_support = 0;
+		if (auth_contexts[i].sig_size) {
+			image_headers[i].update_image_size += sizeof(auth_contexts[i].auth)
+					+ auth_contexts[i].sig_size;
+			image_headers[i].image_capsule_support |= CAPSULE_SUPPORT_AUTHENTICATION;
+		}
 
 		/* Write image header */
 		if (write_capsule_file(f, &image_headers[i], sizeof(image_headers[i]),
 				       "FMP image header"))
 			goto err;
+
+		/* Write signature, if the payload is signed */
+		if (auth_contexts[i].sig_size) {
+			if (write_capsule_file(f, &auth_contexts[i].auth,
+					       sizeof(auth_contexts[i].auth),
+					       "Authentication header"))
+				goto err;
+
+			if (write_capsule_file(f, auth_contexts[i].sig_data,
+					       auth_contexts[i].sig_size, "Signature"))
+				goto err;
+		}
 
 		/* Write payload */
 		if (write_capsule_file(f, payload_data[i], payload_sizes[i], "Payload data"))
@@ -890,6 +925,12 @@ err:
 		for (i = 0; i < params_array->count; i++)
 			free(payload_data[i]);
 		free(payload_data);
+	}
+
+	if (auth_contexts) {
+		for (i = 0; i < params_array->count; i++)
+			free_sig_data(&auth_contexts[i]);
+		free(auth_contexts);
 	}
 
 	free(payload_sizes);
