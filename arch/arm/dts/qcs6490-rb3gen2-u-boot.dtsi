@@ -3,6 +3,17 @@
  * Copyright (c) 2024 Linaro Ltd.
  */
 / {
+	/* IMEM boot cookie + TCSR HW version offsets */
+	qcom_hwinfo: qcom-hwinfo {
+		compatible = "qcom,hwinfo";
+
+		imem = <&{/soc@0/sram@146a5000}>;
+		imem-boot-cookie-offset = <0x5000>;
+
+		tcsr = <&tcsr_2>;
+		tcsr-hw-version-offset = <0x8000>;
+	};
+
 	reserved-memory {
 		#address-cells = <2>;
 		#size-cells = <2>;
