@@ -108,6 +108,15 @@ config QCOM_GENI_MINICORE
 	help
 	  Enable support for minicores in Qualcomm GENI and its peripherals.
 
+config QCOM_HWINFO
+	bool "Qualcomm HW-Info aggregator driver"
+	depends on MISC
+	select SYSCON
+	select REGMAP
+	help
+	  Reads the IMEM boot cookie and TCSR HW version via a common
+	  "qcom,hwinfo" DT node.
+
 config QCOM_SPMI_SDAM
 	bool "Qualcomm SPMI SDAM NVMEM driver"
 	depends on MISC && NVMEM && SPMI
