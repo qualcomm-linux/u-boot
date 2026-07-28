@@ -28,6 +28,7 @@
 #include <time.h>
 
 #include "qcom-priv.h"
+#include "qcom_fit_multidtb.h"
 
 enum qcom_boot_source qcom_boot_source __section(".data") = 0;
 enum qcom_memmap_source qcom_memmap_source __section(".data") = 0;
@@ -468,6 +469,12 @@ int board_late_init(void)
 
 	/* Configure the dfu_string for capsule updates */
 	qcom_configure_capsule_updates();
+
+	/* Try FIT multi-DTB selection if enabled */
+	if (IS_ENABLED(CONFIG_QCOM_FIT_MULTIDTB)) {
+		if (qcom_fit_multidtb_setup())
+			log_debug("FIT multi-DTB selection not available or failed\n");
+	}
 
 	return 0;
 }
