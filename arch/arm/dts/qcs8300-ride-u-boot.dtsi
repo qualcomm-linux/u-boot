@@ -15,5 +15,15 @@
 		      <0x0 0xd0100000 0x0 0x01800000>,
 		      <0x0 0x91b00000 0x0 0x1e500000>;
 	};
+
+	qcom_hwinfo: qcom-hwinfo {
+		compatible = "qcom,hwinfo";
+
+		imem = <&sram>;
+		imem-boot-cookie-offset = <0x0>;
+
+		tcsr = <&tcsr>;
+		tcsr-hw-version-offset = <0x8000>;
+	};
 };
 

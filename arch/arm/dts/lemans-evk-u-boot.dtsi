@@ -14,6 +14,17 @@
 			bootph-all;
 		};
 	};
+
+	/* IMEM boot cookie + TCSR HW version offsets */
+	qcom_hwinfo: qcom-hwinfo {
+		compatible = "qcom,hwinfo";
+
+		imem = <&sram>;
+		imem-boot-cookie-offset = <0x0>;
+
+		tcsr = <&tcsr>;
+		tcsr-hw-version-offset = <0x8000>;
+	};
 };
 
 &ufs_mem_hc {

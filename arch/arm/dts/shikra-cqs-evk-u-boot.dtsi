@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ */
+
+/ {
+	qcom_hwinfo: qcom-hwinfo {
+		compatible = "qcom,hwinfo";
+
+		imem = <&{/soc@0/sram@c11e000}>;
+		imem-boot-cookie-offset = <0x0>;
+
+		tcsr = <&tcsr_regs>;
+		tcsr-hw-version-offset = <0x8000>;
+	};
+};
+
+&{/soc@0/sram@c11e000} {
+	compatible = "qcom,shikra-imem", "syscon", "simple-mfd";
+};
