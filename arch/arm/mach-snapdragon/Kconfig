@@ -56,6 +56,14 @@ config SPL_QCOM_BOOT_FROM_PBL
 	  the r0 register won't contain valid PBL shared data, and boot device
 	  detection will use fallback mechanisms.
 
+config QCOM_HWDETECT
+	bool "Qualcomm Hardware Detection"
+	depends on QCOM_SMEM
+	select QCOM_HWINFO
+	help
+	  Hardware parameter detection from SMEM and TCSR for
+	  DTB selection and other platform subsystems.
+
 choice
 	prompt "Qualcomm boot0.h workaround"
 	optional
