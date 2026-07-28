@@ -56,6 +56,15 @@ config SPL_QCOM_BOOT_FROM_PBL
 	  the r0 register won't contain valid PBL shared data, and boot device
 	  detection will use fallback mechanisms.
 
+config QCOM_FIT_MULTIDTB
+	bool "Enable FIT multi-DTB selection for Qualcomm platforms"
+	depends on FIT
+	select QCOM_HWDETECT
+	help
+	  Enable FIT multi-DTB selection for Qualcomm platforms.
+	  This allows U-Boot to select the appropriate device tree
+	  from a FIT image.
+
 config QCOM_HWDETECT
 	bool "Qualcomm Hardware Detection"
 	depends on QCOM_SMEM
