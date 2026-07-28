@@ -93,6 +93,15 @@ config QCOM_GENI
 	  for providing a common interface for various peripherals like UART, I2C, SPI,
 	  etc.
 
+config QCOM_HWINFO
+	bool "Qualcomm HW-Info aggregator driver"
+	depends on MISC
+	select SYSCON
+	select REGMAP
+	help
+	  Reads the IMEM boot cookie and TCSR HW version via a common
+	  "qcom,hwinfo" DT node.
+
 config QCOM_SPMI_SDAM
 	bool "Qualcomm SPMI SDAM NVMEM driver"
 	depends on MISC && NVMEM && SPMI
