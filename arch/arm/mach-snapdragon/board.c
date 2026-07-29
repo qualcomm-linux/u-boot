@@ -14,6 +14,7 @@
 #include <asm/io.h>
 #include <asm/psci.h>
 #include <asm/system.h>
+#include <blk.h>
 #include <dm/device.h>
 #include <dm/pinctrl.h>
 #include <dm/uclass-internal.h>
@@ -25,11 +26,13 @@
 #include <init.h>
 #include <linux/arm-smccc.h>
 #include <linux/bug.h>
+#include <linux/kernel.h>
 #include <linux/psci.h>
 #include <linux/sizes.h>
 #include <lmb.h>
 #include <malloc.h>
 #include <fdt_support.h>
+#include <part.h>
 #include <usb.h>
 #include <soc/qcom/smem.h>
 #include <sort.h>
@@ -43,6 +46,12 @@ DECLARE_GLOBAL_DATA_PTR;
 
 enum qcom_boot_source qcom_boot_source __section(".data") = 0;
 enum qcom_memmap_source qcom_memmap_source __section(".data") = 0;
+
+/* Number of 512-byte blocks needed to hold the full GPT entry array (entries * entry size) */
+#define GPT_PTE_SECTOR_SIZE	512
+#define GPT_PTE_BLOCKS \
+	DIV_ROUND_UP(CONFIG_EFI_PARTITION_ENTRIES_NUMBERS * GPT_ENTRY_SIZE, \
+		     GPT_PTE_SECTOR_SIZE)
 
 static struct mm_region rbx_mem_map[CONFIG_NR_DRAM_BANKS + 2] = { { 0 } };
 
@@ -210,6 +219,15 @@ void __weak qcom_board_init(void)
 int board_init(void)
 {
 	show_psci_version();
+	/*
+	 * Default cache only covers 8 blocks, too small for the GPT
+	 * partition-entry array, so it's never cached and gets re-read
+	 * and CRC-checked on every part_get_info() call. Raise the limit
+	 * to cache it after the first read.
+	 */
+#if CONFIG_IS_ENABLED(BLOCK_CACHE)
+	blkcache_configure(GPT_PTE_BLOCKS, 32);
+#endif
 	qcom_board_init();
 	return 0;
 }
