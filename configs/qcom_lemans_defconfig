@@ -5,6 +5,7 @@
 
 #include "qcom_defconfig"
 #include "board/qualcomm/exit-gunyah.config"
+#include "board/qualcomm/debug-qcs9100.config"
 
 # Address where U-Boot will be loaded
 CONFIG_TEXT_BASE=0xaf000000
