@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ */
+
+/ {
+	/*
+	 * Reserved regions from the QCS8300/Monaco EDK2 DDR carve-out table
+	 * (SocPkg/Monaco/Common/uefiplat.cfg) that are not already present in
+	 * the kernel's monaco.dtsi reserved-memory node. Without these,
+	 * regions reserved by XBL/TZ on real hardware are not marked reserved
+	 * in the EFI memory map, handed to kernel.
+	 */
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		sail_ss_mem: sail-ss@80000000 {
+			reg = <0x0 0x80000000 0x0 0x10000000>;
+			no-map;
+		};
+
+		hyp_mem: hyp@90000000 {
+			reg = <0x0 0x90000000 0x0 0x600000>;
+			no-map;
+		};
+
+		xbl_boot_mem: xbl-boot@90600000 {
+			reg = <0x0 0x90600000 0x0 0x200000>;
+			no-map;
+		};
+
+		uefi_log: uefi-log@908b0000 {
+			reg = <0x0 0x908b0000 0x0 0x10000>;
+			no-map;
+		};
+
+		sail_md_mem: sail-md@90c00000 {
+			reg = <0x0 0x90c00000 0x0 0x200000>;
+			no-map;
+		};
+
+		sail_ota_mem: sail-ota@90e00000 {
+			reg = <0x0 0x90e00000 0x0 0x300000>;
+			no-map;
+		};
+
+		xbl_dt_mem: xbl-dt@91a40000 {
+			reg = <0x0 0x91a40000 0x0 0x40000>;
+			no-map;
+		};
+
+		gearvm_smem_mem: gearvm-smem@d0000000 {
+			reg = <0x0 0xd0000000 0x0 0x100000>;
+			no-map;
+		};
+
+		tags_mem: tags@d0100000 {
+			reg = <0x0 0xd0100000 0x0 0x1800000>;
+			no-map;
+		};
+
+		trusted_apps_mem: trusted-apps@d1900000 {
+			reg = <0x0 0xd1900000 0x0 0x1900000>;
+			no-map;
+		};
+
+		tz_stat_mem: tz-stat@db100000 {
+			reg = <0x0 0xdb100000 0x0 0x100000>;
+			no-map;
+		};
+
+		cpucp_fw_mem: cpucp-fw@db200000 {
+			reg = <0x0 0xdb200000 0x0 0x100000>;
+			no-map;
+		};
+	};
+};
