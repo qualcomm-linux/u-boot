@@ -76,4 +76,34 @@
 			no-map;
 		};
 	};
+
+	reboot-mode {
+		compatible = "nvmem-reboot-mode";
+		nvmem-cells = <&reboot_reason>;
+		nvmem-cell-names = "reboot-mode";
+
+		mode-bootloader = <0x02>;
+		mode-recovery   = <0x01>;
+	};
+};
+
+&pmm8620au_0 {
+	pmm8620au_0_pon: pon@1200 {
+		compatible = "qcom,pmk8350-pon";
+		reg = <0x1200>, <0x800>;
+		reg-names = "hlos", "pbs";
+	};
+
+	pmm8620au_0_sdam_0: nvram@7100 {
+		compatible = "qcom,spmi-sdam";
+		reg = <0x7100>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x7100 0x100>;
+
+		reboot_reason: reboot-reason@48 {
+			reg = <0x48 0x1>;
+			bits = <1 7>;
+		};
+	};
 };
