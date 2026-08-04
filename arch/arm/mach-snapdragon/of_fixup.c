@@ -289,11 +289,12 @@ int ft_board_setup(void *blob, struct bd_info __maybe_unused *bd)
 	const void *prop;
 	int proplen;
 
-	/* Only apply fixup for Talos and Kodiak platforms */
+	/* Only apply fixup for QCS615, QCS6490, and QCS8300 platforms */
 	if (!of_device_is_compatible(gd->of_root, "qcom,talos-evk", NULL, NULL) &&
 	    !of_device_is_compatible(gd->of_root, "qcom,qcs615", NULL, NULL) &&
 	    !of_device_is_compatible(gd->of_root, "qcom,qcs6490-rb3gen2", NULL, NULL) &&
-	    !of_device_is_compatible(gd->of_root, "qcom,qcm6490", NULL, NULL)) {
+	    !of_device_is_compatible(gd->of_root, "qcom,qcm6490", NULL, NULL) &&
+	    !of_device_is_compatible(gd->of_root, "qcom,qcs8300", NULL, NULL)) {
 		return 0;
 	}
 
