@@ -6,6 +6,11 @@ M:	Aswin Murugan <aswin.murugan@oss.qualcomm.com>
 S:	Maintained
 N:	qcs615
 
+QUALCOMM DRAGONWING SHIKRA
+M:	Aswin Murugan <aswin.murugan@oss.qualcomm.com>
+S:	Maintained
+N:	shikra
+
 # RB3 Gen 2 and similar boards
 QUALCOMM DRAGONWING QCS6490
 M:	Casey Connolly <casey.connolly@linaro.org>
