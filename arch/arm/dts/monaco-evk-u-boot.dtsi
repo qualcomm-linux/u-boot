@@ -117,3 +117,7 @@
 		};
 	};
 };
+
+&vreg_l8a {
+	regulator-always-on;
+};
