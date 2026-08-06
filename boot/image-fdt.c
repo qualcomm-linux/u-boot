@@ -95,7 +95,7 @@ static void boot_fdt_handle_region(u64 addr, u64 size, u32 flags, bool free)
 		debug("   %s fdt memory region: addr=%llx size=%llx flags=%x\n",
 		      free ? "freed" : "reserved", (unsigned long long)addr,
 		      (unsigned long long)size, flags);
-	} else {
+	} else if (ret != -EEXIST && ret != -EINVAL) {
 		printf("ERROR: %s fdt memory region failed (addr=%llx size=%llx flags=%x): %ld\n",
 		       free ? "freeing" : "reserving", (unsigned long long)addr,
 		       (unsigned long long)size, flags, ret);
