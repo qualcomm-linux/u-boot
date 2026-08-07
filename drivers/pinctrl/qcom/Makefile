@@ -16,7 +16,6 @@ obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_QCS615) += pinctrl-qcs615.o
 obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_QCS8300) += pinctrl-qcs8300.o
 obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_SA8775P) += pinctrl-sa8775p.o
 obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_SC7280) += pinctrl-sc7280.o
-obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_SHIKRA) += pinctrl-shikra.o
 obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_SDM660) += pinctrl-sdm660.o
 obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_SDM670) += pinctrl-sdm670.o
 obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_SDM845) += pinctrl-sdm845.o
