@@ -203,14 +203,6 @@ config PINCTRL_QCOM_SC7280
 	help
 	  Say Y here to enable support for pinctrl on the Snapdragon SC7280 SoC,
 
-config PINCTRL_QCOM_SHIKRA
-	bool "Qualcomm Shikra Pinctrl"
-	default y if PINCTRL_QCOM_GENERIC
-	select PINCTRL_QCOM
-	help
-	  Say Y here to enable support for pinctrl on the Qualcomm Shikra SoC,
-	  as well as the associated GPIO driver.
-
 config SPL_PINCTRL_QCOM_SC7280
 	bool "Qualcomm SC7280/QCM6490 Pinctrl in SPL"
 	depends on SPL_PINCTRL_GENERIC
