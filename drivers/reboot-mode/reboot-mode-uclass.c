@@ -55,6 +55,54 @@ int dm_reboot_mode_update(struct udevice *dev)
 	return 0;
 }
 
+int reboot_mode_request(const char *name)
+{
+	const struct reboot_mode_uclass_platdata *plat_data;
+	struct reboot_mode_ops *ops;
+	struct udevice *dev;
+	int i;
+
+	uclass_foreach_dev_probe(UCLASS_REBOOT_MODE, dev) {
+		ops = reboot_mode_get_ops(dev);
+		if (!ops || !ops->trigger)
+			continue;
+
+		plat_data = dev_get_uclass_plat(dev);
+		for (i = 0; i < plat_data->count; i++) {
+			if (strcmp(plat_data->modes[i].mode_name, name))
+				continue;
+
+			/* Does not return on success. */
+			return ops->trigger(dev, plat_data->modes[i].magic,
+					    plat_data->modes[i].count);
+		}
+	}
+
+	return -ENOENT;
+}
+
+int reboot_mode_list(void)
+{
+	const struct reboot_mode_uclass_platdata *plat_data;
+	struct reboot_mode_ops *ops;
+	struct udevice *dev;
+	int i;
+
+	printf("Available reset modes:\n");
+
+	uclass_foreach_dev_probe(UCLASS_REBOOT_MODE, dev) {
+		ops = reboot_mode_get_ops(dev);
+		if (!ops || !ops->trigger)
+			continue;
+
+		plat_data = dev_get_uclass_plat(dev);
+		for (i = 0; i < plat_data->count; i++)
+			printf("  %s\n", plat_data->modes[i].mode_name);
+	}
+
+	return 0;
+}
+
 int dm_reboot_mode_pre_probe(struct udevice *dev)
 {
 	struct reboot_mode_uclass_platdata *plat_data;
