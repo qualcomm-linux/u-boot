@@ -17,6 +17,7 @@
 #include <linux/delay.h>
 #include <linux/log2.h>
 #include <linux/bitfield.h>
+#include <linux/sizes.h>
 
 #include "pcie_dw_common.h"
 
@@ -484,6 +485,9 @@ static int qcom_pcie_probe(struct udevice *dev)
 	struct qcom_pcie *priv = dev_get_priv(dev);
 	struct udevice *ctlr = pci_get_controller(dev);
 	struct pci_controller *hose = dev_get_uclass_priv(ctlr);
+	phys_addr_t cpu_addr;
+	dma_addr_t bus_addr;
+	u64 size;
 	int ret = 0;
 
 	priv->dw.first_busno = dev_seq(dev);
@@ -510,12 +514,32 @@ static int qcom_pcie_probe(struct udevice *dev)
 	else
 		printf("PCIE-%d: Link up timeout\n", dev_seq(dev));
 
-	return pcie_dw_prog_outbound_atu_unroll(&priv->dw,
-						PCIE_ATU_REGION_INDEX0,
-						PCIE_ATU_TYPE_MEM,
-						priv->dw.mem.phys_start,
-						priv->dw.mem.bus_start,
-						priv->dw.mem.size);
+	ret = pcie_dw_prog_outbound_atu_unroll(&priv->dw,
+					       PCIE_ATU_REGION_INDEX0,
+					       PCIE_ATU_TYPE_MEM,
+					       priv->dw.mem.phys_start,
+					       priv->dw.mem.bus_start,
+					       priv->dw.mem.size);
+	if (ret)
+		return ret;
+
+	/* Size the inbound window from "dma-ranges" so PCIe endpoints can DMA to host memory */
+	ret = dev_get_dma_range(dev, &cpu_addr, &bus_addr, &size);
+	if (ret) {
+		dev_warn(dev, "no dma-ranges found, assuming identity map over 4GB\n");
+		cpu_addr = 0;
+		bus_addr = 0;
+		size = SZ_4G;
+	}
+
+	ret = pcie_dw_prog_inbound_atu_unroll(&priv->dw,
+					      PCIE_ATU_REGION_INDEX0,
+					      PCIE_ATU_TYPE_MEM,
+					      bus_addr, cpu_addr, size);
+	if (ret)
+		dev_warn(dev, "failed to configure inbound iATU (%d)\n", ret);
+
+	return 0;
 }
 
 static const struct dm_pci_ops qcom_pcie_ops = {
