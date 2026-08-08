@@ -13,6 +13,7 @@
 #include <asm/io.h>
 #include <asm-generic/gpio.h>
 #include <dm/device_compat.h>
+#include <dm/devres.h>
 #include <linux/iopoll.h>
 #include <linux/delay.h>
 #include <linux/log2.h>
@@ -474,8 +475,48 @@ static int qcom_pcie_parse_dt(struct udevice *dev)
 
 	ret = clk_get_bulk(dev, &priv->clks);
 	if (ret) {
-		dev_err(dev, "failed to get clocks (%d)\n", ret);
-		return ret;
+		/*
+		 * clk_get_bulk() aborts on the first unresolved clock (e.g.
+		 * a not-yet-registered PHY pipe clock), dropping clocks
+		 * fetched earlier too. Fall back to fetching one at a time,
+		 * skipping ones not yet available (-ENODEV/-ENOENT), which
+		 * are expected to be enabled by their own provider later.
+		 */
+		int count = dev_count_phandle_with_args(dev, "clocks",
+							"#clock-cells", 0);
+		int idx;
+
+		priv->clks.count = 0;
+		if (count > 0) {
+			priv->clks.clks = devm_kcalloc(dev, count,
+						       sizeof(struct clk),
+						       GFP_KERNEL);
+			if (!priv->clks.clks)
+				return -ENOMEM;
+
+			for (idx = 0; idx < count; idx++) {
+				ret = clk_get_by_index(dev, idx,
+						       &priv->clks.clks[priv->clks.count]);
+				if (!ret) {
+					priv->clks.count++;
+				} else if (ret != -ENODEV && ret != -ENOENT) {
+					dev_err(dev, "failed to get clock %d (%d)\n",
+						idx, ret);
+					return ret;
+				}
+			}
+		}
+	}
+
+	/* Ensure the power domain is on before any PARF register access */
+	{
+		struct power_domain pd;
+
+		if (!power_domain_get_by_index(dev, &pd, 0)) {
+			ret = power_domain_on(&pd);
+			if (ret && ret != -ENOSYS)
+				dev_warn(dev, "failed to enable power domain (%d)\n", ret);
+		}
 	}
 
 	ret = generic_phy_get_by_index(dev, 0, &priv->phy);
