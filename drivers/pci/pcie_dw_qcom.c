@@ -17,6 +17,7 @@
 #include <linux/delay.h>
 #include <linux/log2.h>
 #include <linux/bitfield.h>
+#include <linux/kernel.h>
 #include <linux/sizes.h>
 
 #include "pcie_dw_common.h"
@@ -49,7 +50,6 @@ struct qcom_pcie {
 #define PARF_PHY_CTRL				0x40
 #define PARF_PHY_REFCLK				0x4c
 #define PARF_CONFIG_BITS			0x50
-#define PARF_DBI_BASE_ADDR			0x168
 #define PARF_MHI_CLOCK_RESET_CTRL		0x174
 #define PARF_AXI_MSTR_WR_ADDR_HALT		0x178
 #define PARF_AXI_MSTR_WR_ADDR_HALT_V2		0x1a8
@@ -57,7 +57,12 @@ struct qcom_pcie {
 #define PARF_LTSSM				0x1b0
 #define PARF_SID_OFFSET				0x234
 #define PARF_BDF_TRANSLATE_CFG			0x24c
-#define PARF_SLV_ADDR_SPACE_SIZE		0x358
+#define PARF_DBI_BASE_ADDR_V2			0x350
+#define PARF_DBI_BASE_ADDR_V2_HI		0x354
+#define PARF_SLV_ADDR_SPACE_SIZE_V2		0x358
+#define PARF_SLV_ADDR_SPACE_SIZE_V2_HI		0x35c
+#define PARF_ATU_BASE_ADDR			0x634
+#define PARF_ATU_BASE_ADDR_HI			0x638
 #define PARF_DEVICE_TYPE			0x1000
 #define PARF_BDF_TO_SID_TABLE_N			0x2000
 
@@ -111,8 +116,8 @@ struct qcom_pcie {
 /* PARF_CONFIG_BITS register fields */
 #define PHY_RX0_EQ(x)				FIELD_PREP(GENMASK(26, 24), x)
 
-/* PARF_SLV_ADDR_SPACE_SIZE register value */
-#define SLV_ADDR_SPACE_SZ			0x10000000
+/* PARF_SLV_ADDR_SPACE_SIZE_V2/_HI register value (64-bit pair, matches Linux) */
+#define SLV_ADDR_SPACE_SZ_V2_HI			0x80000000
 
 /* PARF_MHI_CLOCK_RESET_CTRL register fields */
 #define AHB_CLK_EN				BIT(0)
@@ -298,6 +303,7 @@ static int qcom_pcie_init_port(struct udevice *dev)
 	struct qcom_pcie *priv = dev_get_priv(dev);
 	int vreg, ret;
 	u32 val;
+	u64 dbi_phys, atu_phys;
 
 	dm_gpio_set_value(&priv->rst_gpio, 1);
 	udelay(PERST_DELAY_US);
@@ -346,8 +352,16 @@ static int qcom_pcie_init_port(struct udevice *dev)
 	val &= ~PHY_TEST_PWR_DOWN;
 	writel(val, priv->parf + PARF_PHY_CTRL);
 
-	/* change DBI base address */
-	writel(0, priv->parf + PARF_DBI_BASE_ADDR);
+	/* Tell the RC where its DBI/ATU blocks live, and size the slave address space */
+	dbi_phys = (u64)(uintptr_t)priv->dw.dbi_base;
+	atu_phys = (u64)(uintptr_t)priv->dw.atu_base;
+
+	writel(lower_32_bits(dbi_phys), priv->parf + PARF_DBI_BASE_ADDR_V2);
+	writel(upper_32_bits(dbi_phys), priv->parf + PARF_DBI_BASE_ADDR_V2_HI);
+	writel(lower_32_bits(atu_phys), priv->parf + PARF_ATU_BASE_ADDR);
+	writel(upper_32_bits(atu_phys), priv->parf + PARF_ATU_BASE_ADDR_HI);
+	writel(0x0, priv->parf + PARF_SLV_ADDR_SPACE_SIZE_V2);
+	writel(SLV_ADDR_SPACE_SZ_V2_HI, priv->parf + PARF_SLV_ADDR_SPACE_SIZE_V2_HI);
 
 	/* MAC PHY_POWERDOWN MUX DISABLE  */
 	val = readl(priv->parf + PARF_SYS_CTRL);
