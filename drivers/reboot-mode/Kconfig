@@ -47,4 +47,15 @@ config REBOOT_MODE_ENV_UPDATE
 	  dm_reboot_mode_update() on the first reboot-mode device at last
 	  stage init.
 
+config REBOOT_MODE_PSCI
+	bool "Use PSCI SYSTEM_RESET2 vendor resets as reboot modes"
+	depends on DM_REBOOT_MODE && ARM_SMCCC
+	help
+	  Trigger PSCI SYSTEM_RESET2 vendor-specific resets (for example
+	  rebooting a Qualcomm SoC into EDL/download mode) via the reboot-mode
+	  framework. Each reset is described by a "mode-*" property under the
+	  "reboot-mode" subnode of the psci device tree node, so the magic
+	  values are not hard-coded in the driver. The modes can then be
+	  triggered from the "reset" command by name.
+
 endmenu
