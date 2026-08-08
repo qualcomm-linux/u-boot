@@ -188,6 +188,22 @@ static int psci_bind(struct udevice *dev)
 			pr_debug("PSCI System Reset was not bound.\n");
 	}
 
+	/*
+	 * Bind the PSCI reboot-mode driver to the "reboot-mode" subnode so it
+	 * can trigger SYSTEM_RESET2 vendor resets described by "mode-*"
+	 * properties there (for example EDL/download mode).
+	 */
+	if (CONFIG_IS_ENABLED(REBOOT_MODE_PSCI)) {
+		ofnode rm_node = ofnode_find_subnode(dev_ofnode(dev),
+						     "reboot-mode");
+
+		if (ofnode_valid(rm_node) &&
+		    device_bind_driver_to_node(dev, "reboot-mode-psci",
+					       "reboot-mode-psci", rm_node,
+					       NULL))
+			pr_warn("PSCI reboot-mode was not bound.\n");
+	}
+
 	/* From PSCI v1.0 onward we can discover services through ARM_SMCCC_FEATURE */
 	if (IS_ENABLED(CONFIG_ARM_SMCCC_FEATURES) && device_is_compatible(dev, "arm,psci-1.0"))
 		dev_or_flags(dev, DM_FLAG_PROBE_AFTER_BIND);
