@@ -9,9 +9,15 @@
 #include <asm/types.h>
 #include <dm/device.h>
 
+/*
+ * Maximum number of 32-bit magic cells a reboot mode may carry.
+ */
+#define REBOOT_MODE_MAX_MAGIC	3
+
 struct reboot_mode_mode {
 	const char *mode_name;
-	u32 mode_id;
+	u32 magic[REBOOT_MODE_MAX_MAGIC];
+	u8 count;
 };
 
 struct reboot_mode_uclass_platdata {
