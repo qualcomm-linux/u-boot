@@ -489,6 +489,9 @@ static int qcom_pcie_probe(struct udevice *dev)
 	priv->dw.first_busno = dev_seq(dev);
 	priv->dw.dev = dev;
 
+	/* Wire up the per-SoC ops so qcom_pcie_init_port() can call config_sid() */
+	priv->ops = (struct qcom_pcie_ops *)dev_get_driver_data(dev);
+
 	ret = qcom_pcie_parse_dt(dev);
 	if (ret)
 		return ret;
