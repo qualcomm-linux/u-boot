@@ -31,7 +31,7 @@ int dm_reboot_mode_update(struct udevice *dev)
 		dev_get_uclass_plat(dev);
 
 	for (i = 0; i < plat_data->count; i++) {
-		if (plat_data->modes[i].mode_id == rebootmode) {
+		if (plat_data->modes[i].magic[0] == rebootmode) {
 			ret = env_set(plat_data->env_variable,
 				      plat_data->modes[i].mode_name);
 			if (ret) {
@@ -69,6 +69,7 @@ int dm_reboot_mode_pre_probe(struct udevice *dev)
 	struct ofprop property;
 	const u32 *propvalue;
 	const char *propname;
+	int len, cells, i;
 
 	plat_data->env_variable = dev_read_string(dev, "u-boot,env-variable");
 	if (!plat_data->env_variable)
@@ -94,19 +95,34 @@ int dm_reboot_mode_pre_probe(struct udevice *dev)
 	struct reboot_mode_mode *next = plat_data->modes;
 
 	dev_for_each_property(property, dev) {
-		propvalue = dev_read_prop_by_prop(&property, &propname, NULL);
+		propvalue = dev_read_prop_by_prop(&property, &propname, &len);
 		if (!propvalue) {
 			dev_err(dev, "Could not get the value for property %s\n",
 				propname);
 			return -EINVAL;
 		}
 
-		if (!strncmp(propname, mode_prefix, mode_prefix_len)) {
-			next->mode_name = &propname[mode_prefix_len];
-			next->mode_id = fdt32_to_cpu(*propvalue);
+		if (strncmp(propname, mode_prefix, mode_prefix_len))
+			continue;
 
-			next++;
+		/*
+		 * A mode may carry 1 to REBOOT_MODE_MAX_MAGIC 32-bit cells.
+		 * Cells beyond the maximum are ignored.
+		 */
+		cells = len / sizeof(u32);
+		if (cells < 1) {
+			dev_err(dev, "Mode %s has no magic value\n", propname);
+			return -EINVAL;
 		}
+		if (cells > REBOOT_MODE_MAX_MAGIC)
+			cells = REBOOT_MODE_MAX_MAGIC;
+
+		next->mode_name = &propname[mode_prefix_len];
+		next->count = cells;
+		for (i = 0; i < cells; i++)
+			next->magic[i] = fdt32_to_cpu(propvalue[i]);
+
+		next++;
 	}
 #else
 	if (!plat_data->env_variable)
