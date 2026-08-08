@@ -17,6 +17,7 @@
 #include <linux/delay.h>
 #include <linux/log2.h>
 #include <linux/bitfield.h>
+#include <linux/kernel.h>
 #include <linux/sizes.h>
 
 #include "pcie_dw_common.h"
@@ -58,6 +59,12 @@ struct qcom_pcie {
 #define PARF_SID_OFFSET				0x234
 #define PARF_BDF_TRANSLATE_CFG			0x24c
 #define PARF_SLV_ADDR_SPACE_SIZE		0x358
+#define PARF_DBI_BASE_ADDR_V2			0x350
+#define PARF_DBI_BASE_ADDR_V2_HI		0x354
+#define PARF_SLV_ADDR_SPACE_SIZE_V2		0x358
+#define PARF_SLV_ADDR_SPACE_SIZE_V2_HI		0x35c
+#define PARF_ATU_BASE_ADDR			0x634
+#define PARF_ATU_BASE_ADDR_HI			0x638
 #define PARF_DEVICE_TYPE			0x1000
 #define PARF_BDF_TO_SID_TABLE_N			0x2000
 
@@ -113,6 +120,9 @@ struct qcom_pcie {
 
 /* PARF_SLV_ADDR_SPACE_SIZE register value */
 #define SLV_ADDR_SPACE_SZ			0x10000000
+
+/* PARF_SLV_ADDR_SPACE_SIZE_V2/_HI register value (64-bit pair, matches Linux) */
+#define SLV_ADDR_SPACE_SZ_V2_HI			0x80000000
 
 /* PARF_MHI_CLOCK_RESET_CTRL register fields */
 #define AHB_CLK_EN				BIT(0)
@@ -348,6 +358,19 @@ static int qcom_pcie_init_port(struct udevice *dev)
 
 	/* change DBI base address */
 	writel(0, priv->parf + PARF_DBI_BASE_ADDR);
+
+	/* Tell the RC where its DBI/ATU blocks live, and size the slave address space */
+	{
+		u64 dbi_phys = (u64)(uintptr_t)priv->dw.dbi_base;
+		u64 atu_phys = (u64)(uintptr_t)priv->dw.atu_base;
+
+		writel(lower_32_bits(dbi_phys), priv->parf + PARF_DBI_BASE_ADDR_V2);
+		writel(upper_32_bits(dbi_phys), priv->parf + PARF_DBI_BASE_ADDR_V2_HI);
+		writel(lower_32_bits(atu_phys), priv->parf + PARF_ATU_BASE_ADDR);
+		writel(upper_32_bits(atu_phys), priv->parf + PARF_ATU_BASE_ADDR_HI);
+		writel(0x0, priv->parf + PARF_SLV_ADDR_SPACE_SIZE_V2);
+		writel(SLV_ADDR_SPACE_SZ_V2_HI, priv->parf + PARF_SLV_ADDR_SPACE_SIZE_V2_HI);
+	}
 
 	/* MAC PHY_POWERDOWN MUX DISABLE  */
 	val = readl(priv->parf + PARF_SYS_CTRL);
