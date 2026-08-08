@@ -144,6 +144,65 @@ int pcie_dw_prog_outbound_atu_unroll(struct pcie_dw *pci, int index,
 	return -1;
 }
 
+static void dw_pcie_writel_ib_unroll(struct pcie_dw *pci, u32 index, u32 reg,
+				     u32 val)
+{
+	u32 offset = PCIE_GET_ATU_INB_UNR_REG_OFFSET(index);
+	void __iomem *base = pci->atu_base;
+
+	writel(val, base + offset + reg);
+}
+
+static u32 dw_pcie_readl_ib_unroll(struct pcie_dw *pci, u32 index, u32 reg)
+{
+	u32 offset = PCIE_GET_ATU_INB_UNR_REG_OFFSET(index);
+	void __iomem *base = pci->atu_base;
+
+	return readl(base + offset + reg);
+}
+
+int pcie_dw_prog_inbound_atu_unroll(struct pcie_dw *pci, int index, int type,
+				    u64 pci_addr, u64 cpu_addr, u64 size)
+{
+	u32 retries, val;
+
+	dev_dbg(pci->dev,
+		"inbound ATU: index=%d type=%d pci_addr=%#llx cpu_addr=%#llx size=%#llx\n",
+		index, type, pci_addr, cpu_addr, size);
+
+	/* PCIe bus address range that this window matches on */
+	dw_pcie_writel_ib_unroll(pci, index, PCIE_ATU_UNR_LOWER_BASE,
+				 lower_32_bits(pci_addr));
+	dw_pcie_writel_ib_unroll(pci, index, PCIE_ATU_UNR_UPPER_BASE,
+				 upper_32_bits(pci_addr));
+	dw_pcie_writel_ib_unroll(pci, index, PCIE_ATU_UNR_LIMIT,
+				 lower_32_bits(pci_addr + size - 1));
+	dw_pcie_writel_ib_unroll(pci, index, PCIE_ATU_UNR_UPPER_LIMIT,
+				 upper_32_bits(pci_addr + size - 1));
+
+	/* AXI/host target address to translate matching accesses to */
+	dw_pcie_writel_ib_unroll(pci, index, PCIE_ATU_UNR_LOWER_TARGET,
+				 lower_32_bits(cpu_addr));
+	dw_pcie_writel_ib_unroll(pci, index, PCIE_ATU_UNR_UPPER_TARGET,
+				 upper_32_bits(cpu_addr));
+
+	dw_pcie_writel_ib_unroll(pci, index, PCIE_ATU_UNR_REGION_CTRL1, type);
+	dw_pcie_writel_ib_unroll(pci, index, PCIE_ATU_UNR_REGION_CTRL2,
+				 PCIE_ATU_ENABLE);
+
+	for (retries = 0; retries < LINK_WAIT_MAX_IATU_RETRIES; retries++) {
+		val = dw_pcie_readl_ib_unroll(pci, index,
+					      PCIE_ATU_UNR_REGION_CTRL2);
+		if (val & PCIE_ATU_ENABLE)
+			return 0;
+
+		udelay(LINK_WAIT_IATU);
+	}
+	dev_err(pci->dev, "inbound iATU is not being enabled\n");
+
+	return -1;
+}
+
 /**
  * set_cfg_address() - Configure the PCIe controller config space access
  *
