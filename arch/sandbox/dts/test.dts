@@ -209,6 +209,12 @@
 		mode-download = <0x51939147>;
 	};
 
+	reboot-mode-trigger {
+		compatible = "reboot-mode-test-trigger";
+		mode-obelisk = <0x80000000 0x00000001>;
+		mode-sarcophagus = <0x80000000>;
+	};
+
 	audio: audio-codec {
 		compatible = "sandbox,audio-codec";
 		#sound-dai-cells = <1>;
