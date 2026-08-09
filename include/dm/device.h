@@ -203,6 +203,13 @@ struct udevice {
 #endif
 #if CONFIG_IS_ENABLED(IOMMU)
 	struct udevice *iommu;
+	/*
+	 * Stream ID resolved from a PCI iommu-map property, for devices
+	 * that have no ofnode of their own to carry an "iommus" property
+	 * (e.g. dynamically enumerated PCI endpoints). Valid only when
+	 * iommu is set and the device has no "iommus" property of its own.
+	 */
+	u32 pci_iommu_sid;
 #endif
 };
 
