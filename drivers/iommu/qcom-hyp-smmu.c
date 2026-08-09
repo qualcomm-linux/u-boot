@@ -7,7 +7,6 @@
  */
 
 #include <log.h>
-#include <cpu_func.h>
 #include <dm.h>
 #include <iommu.h>
 #include <linux/bitfield.h>
@@ -92,8 +91,6 @@ struct qcom_smmu_priv {
 	phys_addr_t base;
 	struct list_head devices;
 	struct udevice *dev;
-	/* SMMU is not needed when running in EL2 */
-	bool disable;
 
 	/* Read-once config */
 	int num_cb;
@@ -132,12 +129,25 @@ struct mmu_dev {
 
 static int get_stream_id(struct udevice *dev)
 {
-	ofnode node = dev_ofnode(dev);
+	ofnode node;
 	struct ofnode_phandle_args args;
-	int count = ofnode_parse_phandle_with_args(node, "iommus",
-						   "#iommu-cells", 0, 0, &args);
+	int count;
+
+	if (!dev_has_ofnode(dev))
+		return dev->pci_iommu_sid;
+
+	node = dev_ofnode(dev);
+	count = ofnode_parse_phandle_with_args(node, "iommus",
+					       "#iommu-cells", 0, 0, &args);
 
 	if (count < 0) {
+		/*
+		 * No "iommus" property of its own: PCI endpoint resolved
+		 * via an ancestor's iommu-map property instead.
+		 */
+		if (device_is_on_pci_bus(dev))
+			return dev->pci_iommu_sid;
+
 		printf("Error: %s: iommus property not found or wrong number of cells\n",
 		       __func__);
 		return -EINVAL;
@@ -280,9 +290,6 @@ static int qcom_smmu_connect(struct udevice *dev)
 	if (WARN_ON(!priv))
 		return -EINVAL;
 
-	if (priv->disable)
-		return 0;
-
 	mdev = alloc_dev(dev);
 	if (IS_ERR(mdev) && PTR_ERR(mdev) != -EEXIST) {
 		printf("%s: %s Couldn't create mmu context\n", __func__,
@@ -353,8 +360,6 @@ static int qcom_smmu_probe(struct udevice *dev)
 	priv->dev = dev;
 	priv->base = dev_read_addr(dev);
 	INIT_LIST_HEAD(&priv->devices);
-
-	priv->disable = current_el() > 1;
 
 	/* Read SMMU config */
 	val = gr0_readl(priv, ARM_SMMU_GR0_ID0);

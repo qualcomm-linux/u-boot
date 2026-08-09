@@ -18,8 +18,9 @@ static int dev_pci_iommu_enable(struct udevice *dev)
 {
 	struct udevice *parent = dev->parent;
 	struct udevice *dev_iommu;
+	const struct iommu_ops *ops;
 	u32 *iommu_map;
-	u32 iommu_map_mask, length, phandle, rid, rid_base;
+	u32 iommu_map_mask, length, phandle, rid, rid_base, iommu_base;
 	int i, count, len, ret;
 
 	while (parent) {
@@ -50,6 +51,7 @@ static int dev_pci_iommu_enable(struct udevice *dev)
 	for (i = 0; i < count; i += 4) {
 		rid_base = iommu_map[i];
 		phandle = iommu_map[i + 1];
+		iommu_base = iommu_map[i + 2];
 		length = iommu_map[i + 3];
 
 		if (rid < rid_base || rid >= rid_base + length)
@@ -64,6 +66,18 @@ static int dev_pci_iommu_enable(struct udevice *dev)
 			return ret;
 		}
 		dev->iommu = dev_iommu;
+		dev->pci_iommu_sid = iommu_base + (rid - rid_base);
+
+		ops = device_get_ops(dev->iommu);
+		if (ops && ops->connect) {
+			ret = ops->connect(dev);
+			if (ret) {
+				log_err("%s: Failed to connect '%s' to IOMMU '%s': %d\n",
+					__func__, dev->name, dev->iommu->name, ret);
+				free(iommu_map);
+				return ret;
+			}
+		}
 		break;
 	}
 
@@ -79,41 +93,43 @@ int dev_iommu_enable(struct udevice *dev)
 	const struct iommu_ops *ops;
 	int i, count, ret = 0;
 
-	if (!dev_has_ofnode(dev))
-		return 0;
-
-	count = dev_count_phandle_with_args(dev, "iommus",
-					    "#iommu-cells", 0);
-	for (i = 0; i < count; i++) {
-		ret = dev_read_phandle_with_args(dev, "iommus",
-						 "#iommu-cells", 0, i, &args);
-		if (ret) {
-			log_err("%s: Failed to parse 'iommus' property for '%s': %d\n",
-				__func__, dev->name, ret);
-			return ret;
-		}
-
-		ret = uclass_get_device_by_ofnode(UCLASS_IOMMU, args.node,
-						  &dev_iommu);
-		if (ret) {
-			log_err("%s: Failed to find IOMMU device for '%s': %d\n",
-				__func__, dev->name, ret);
-			return ret;
-		}
-		dev->iommu = dev_iommu;
-
-		if (dev->parent && dev->parent->iommu == dev_iommu)
-			continue;
-
-		ops = device_get_ops(dev->iommu);
-		if (ops && ops->connect) {
-			ret = ops->connect(dev);
+	if (dev_has_ofnode(dev)) {
+		count = dev_count_phandle_with_args(dev, "iommus",
+						    "#iommu-cells", 0);
+		for (i = 0; i < count; i++) {
+			ret = dev_read_phandle_with_args(dev, "iommus",
+							 "#iommu-cells", 0, i,
+							 &args);
 			if (ret) {
-				log_err("%s: Failed to connect '%s' to IOMMU '%s': %d\n",
-					__func__, dev->name, dev->iommu->name, ret);
+				log_err("%s: Failed to parse 'iommus' property for '%s': %d\n",
+					__func__, dev->name, ret);
 				return ret;
 			}
+
+			ret = uclass_get_device_by_ofnode(UCLASS_IOMMU, args.node,
+							  &dev_iommu);
+			if (ret) {
+				log_err("%s: Failed to find IOMMU device for '%s': %d\n",
+					__func__, dev->name, ret);
+				return ret;
+			}
+			dev->iommu = dev_iommu;
+
+			if (dev->parent && dev->parent->iommu == dev_iommu)
+				continue;
+
+			ops = device_get_ops(dev->iommu);
+			if (ops && ops->connect) {
+				ret = ops->connect(dev);
+				if (ret) {
+					log_err("%s: Failed to connect '%s' to IOMMU '%s': %d\n",
+						__func__, dev->name, dev->iommu->name, ret);
+					return ret;
+				}
+			}
 		}
+	} else {
+		count = -1;
 	}
 
 #if CONFIG_IS_ENABLED(PCI)
