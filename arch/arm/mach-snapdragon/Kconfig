@@ -26,6 +26,9 @@ config SYS_MALLOC_LEN
 config LNX_KRNL_IMG_TEXT_OFFSET_BASE
 	default 0x80000000
 
+config REMAKE_ELF_LDSCRIPT
+	default "arch/arm/mach-snapdragon/u-boot-elf-snapdragon.lds"
+
 config SYS_BOARD
 	string "Snapdragon SoCs based board"
 	help
