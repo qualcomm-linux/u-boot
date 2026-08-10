@@ -135,6 +135,15 @@ config SPL_QCOM_GENI
 	  for providing a common interface for various peripherals like UART, I2C, SPI,
 	  etc.
 
+config QCOM_GENI_FW_LOAD
+	bool "Load Qualcomm GENI peripheral firmware at late init"
+	depends on QCOM_GENI
+	default y
+	help
+	  Load firmware for GENI peripherals from the firmware partition
+	  at late init. Disable if no GENI peripheral needs firmware
+	  loading.
+
 config ROCKCHIP_EFUSE
 	bool "Rockchip e-fuse support"
 	depends on MISC
