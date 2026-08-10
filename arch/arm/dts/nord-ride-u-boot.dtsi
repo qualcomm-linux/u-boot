@@ -54,6 +54,10 @@
 };
 
 &ufs_mem_hc {
+	compatible = "qcom,sa8797p-ufshc",
+		     "qcom,sa8255p-ufshc",
+		     "qcom,ufshc";
+
 	clocks = <&negcc NE_GCC_UFS_PHY_AXI_CLK>,
 		 <&negcc NE_GCC_AGGRE_NOC_UFS_PHY_AXI_CLK>,
 		 <&negcc NE_GCC_UFS_PHY_AHB_CLK>,
@@ -76,4 +80,34 @@
 
 	phys = <&ufs_mem_phy>;
 	phy-names = "ufsphy";
+};
+
+&uart4 {
+	compatible = "qcom,sa8797p-geni-uart",
+		     "qcom,sa8255p-geni-uart",
+		     "qcom,geni-uart";
+};
+
+&uart15 {
+	compatible = "qcom,sa8797p-geni-debug-uart",
+		     "qcom,sa8255p-geni-debug-uart",
+		     "qcom,geni-debug-uart";
+};
+
+&qupv3_0 {
+	compatible = "qcom,sa8797p-geni-se-qup",
+		     "qcom,sa8255p-geni-se-qup",
+		     "qcom,geni-se-qup";
+};
+
+&qupv3_1 {
+	compatible = "qcom,sa8797p-geni-se-qup",
+		     "qcom,sa8255p-geni-se-qup",
+		     "qcom,geni-se-qup";
+};
+
+&qupv3_2 {
+	compatible = "qcom,sa8797p-geni-se-qup",
+		     "qcom,sa8255p-geni-se-qup",
+		     "qcom,geni-se-qup";
 };
