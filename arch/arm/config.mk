@@ -120,6 +120,13 @@ ifeq ($(CONFIG_ARM64),y)
 LDFLAGS_u-boot += -z common-page-size=0x1000 -z max-page-size=0x1000
 endif
 
+ifeq ($(CONFIG_ARCH_SNAPDRAGON),y)
+# The CONFIG_REMAKE_ELF u-boot.elf link step doesn't pick up the
+# 4K page-size flags used for u-boot.bin above, so wire them in here
+# too. TME's IMGAUTH requires 4K-aligned ELF segments.
+LDFLAGS_u-boot-elf += -z common-page-size=0x1000 -z max-page-size=0x1000
+endif
+
 #
 # FIXME: binutils versions < 2.22 have a bug in the assembler where
 # branches to weak symbols can be incorrectly optimized in thumb mode
