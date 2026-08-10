@@ -562,7 +562,7 @@ static int fdt_cmp_res(const void *v1, const void *v2)
 	return res1->start - res2->start;
 }
 
-#define N_RESERVED_REGIONS 64
+#define N_RESERVED_REGIONS 256
 
 /* Map and unmap reserved memory regions as appropriate.
  * Mark all no-map regions as PTE_TYPE_FAULT to prevent speculative access.
@@ -610,11 +610,25 @@ static void configure_reserved_memory(void)
 		 */
 		ptr = fdt_getprop(gd->fdt_blob, rmem, "reg", NULL);
 		if (ptr) {
-			/* Qualcomm devices use #address/size-cells = <2> but all reserved regions are within
-			 * the 32-bit address space. So we can cheat here for speed.
+			u64 rstart, rend;
+
+			/* Qualcomm devices use #address/size-cells = <2>. Reserved regions
+			 * are within the 32-bit space, so the low cells hold addr/size.
 			 */
-			res[i].start = fdt32_to_cpu(ptr[1]);
-			res[i].size = fdt32_to_cpu(ptr[3]);
+			rstart = fdt32_to_cpu(ptr[1]);
+			rend = rstart + fdt32_to_cpu(ptr[3]);
+
+			/* The MMU works at page (4K) granularity: mmu_change_region_attr_nobreak()
+			 * cannot map a sub-page region and would spin forever on one (e.g. the
+			 * 0x80-byte SCMI shmem mailboxes two-to-a-page at 0x87608000/0x87608180).
+			 * Page-align every region here so we protect the pages *containing* each
+			 * carveout. All sub-page reserved regions on Qualcomm SoCs seen so far are
+			 * driver-accessible (VALID), so rounding the enclosing page to VALID is
+			 * safe; a sub-page no-map (FAULT) region sharing a page with usable RAM
+			 * would need VALID-wins precedence handling — none exist on this SoC.
+			 */
+			res[i].start = rstart & ~((u64)SZ_4K - 1);
+			res[i].size = ALIGN(rend, SZ_4K) - res[i].start;
 			res[i].attrs = attrs;
 			i++;
 		}
