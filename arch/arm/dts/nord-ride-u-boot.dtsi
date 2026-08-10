@@ -39,6 +39,18 @@
 
 		status = "okay";
 	};
+
+	smem {
+		compatible = "qcom,smem";
+		memory-region = <&smem_region>;
+	};
+};
+
+&reserved_memory {
+	smem_region: smem-region@89b00000 {
+		reg = <0x0 0x89b00000 0x0 0x400000>;
+		no-map;
+	};
 };
 
 &ufs_mem_hc {
