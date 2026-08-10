@@ -92,6 +92,7 @@ static const struct qcom_soc_info qcom_soc_table[] = {
 	{ "qcom,qcs615",  0x146aa000, 0x01fc8000 },
 	{ "qcom,qcs9100", 0x146d8000, 0x01fc8000 },
 	{ "qcom,shikra",  0x0c11e000, 0x003c8000 },
+	{ "qcom,nord",    0x146d8000, 0x01fc8000 },
 	{ }
 };
 
