@@ -626,7 +626,9 @@ mini_core:
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_QCOM_GENI_FW_LOAD)
 EVENT_SPY_SIMPLE(EVT_LAST_STAGE_INIT, qcom_geni_fw_initialise);
+#endif
 
 static const struct udevice_id geni_ids[] = {
 	{ .compatible = "qcom,geni-se-qup" },
