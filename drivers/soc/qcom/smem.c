@@ -88,7 +88,7 @@
 #define SMEM_GLOBAL_HOST	0xfffe
 
 /* Max number of processors/hosts in a system */
-#define SMEM_HOST_COUNT		30
+#define SMEM_HOST_COUNT		256
 
 /**
   * struct smem_proc_comm - proc_comm communication struct (legacy)
@@ -937,7 +937,8 @@ qcom_smem_enumerate_partitions(struct qcom_smem *smem, u16 local_host)
 			continue;
 
 		if (remote_host >= SMEM_HOST_COUNT) {
-			log_err("bad host %u\n", remote_host);
+			log_err("bad host %u (SMEM_HOST_COUNT=%u too small)\n",
+				remote_host, SMEM_HOST_COUNT);
 			return -EINVAL;
 		}
 
