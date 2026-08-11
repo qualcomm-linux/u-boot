@@ -966,6 +966,7 @@ F:	cmd/nvedit_efi.c
 F:	doc/api/efi.rst
 F:	doc/develop/uefi/*
 F:	doc/mkeficapsule.1
+F:	doc/usage/cmd/efidebug.rst
 F:	drivers/rtc/emul_rtc.c
 F:	include/capitalization.h
 F:	include/charset.h

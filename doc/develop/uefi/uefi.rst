@@ -602,6 +602,10 @@ following command::
 
     dfu list
 
+The images a board exposes for capsule updates, together with their image
+index, name and image type GUID, can be listed with the *efidebug capsule
+images* command, see :doc:`/usage/cmd/efidebug`.
+
 When the FWU Multi Bank Update feature is enabled on the platform, the
 image index is used only to identify the image index with the image
 GUID. The image index would not correspond to the dfu alt number. This
