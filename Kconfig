@@ -559,6 +559,14 @@ config REMAKE_ELF
 	  U-Boot binary (u-boot.bin), which may already have been statically
 	  relocated and may already have a device-tree appended to it.
 
+config REMAKE_ELF_LDSCRIPT
+	string "Linker script for u-boot.elf"
+	depends on REMAKE_ELF
+	default "arch/u-boot-elf.lds"
+	help
+	  This allows specifying a linker script that will be used to
+	  re-wrap the U-Boot binary into an ELF.
+
 config BUILD_TARGET
 	string "Build target special images"
 	default "u-boot-elf.shdr" if RCAR_64 && RCAR_64_RSIP

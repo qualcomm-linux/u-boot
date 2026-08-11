@@ -505,6 +505,7 @@ dtb-$(CONFIG_TARGET_TEN64) += fsl-ls1088a-ten64.dtb
 dtb-$(CONFIG_TARGET_STEMMY) += ste-ux500-samsung-stemmy.dtb
 
 dtb-$(CONFIG_ARCH_SNAPDRAGON) += \
+        nord-ride.dtb \
         shikra-cqm-evk.dtb \
         shikra-cqs-evk.dtb \
         shikra-iqs-evk.dtb

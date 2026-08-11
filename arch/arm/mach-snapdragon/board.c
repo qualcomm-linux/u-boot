@@ -44,7 +44,12 @@ DECLARE_GLOBAL_DATA_PTR;
 enum qcom_boot_source qcom_boot_source __section(".data") = 0;
 enum qcom_memmap_source qcom_memmap_source __section(".data") = 0;
 
-static struct mm_region rbx_mem_map[CONFIG_NR_DRAM_BANKS + 2] = { { 0 } };
+/*
+ * +2 for the peripheral block entry and the terminator, and another
+ * +CONFIG_NR_DRAM_BANKS so each inter-bank gap can get its own entry
+ * (see build_mem_map()).
+ */
+static struct mm_region rbx_mem_map[2 * CONFIG_NR_DRAM_BANKS + 2] = { { 0 } };
 
 struct mm_region *mem_map = rbx_mem_map;
 
@@ -510,6 +515,7 @@ int board_late_init(void)
 static void build_mem_map(void)
 {
 	int i, j;
+	phys_addr_t prev_end;
 
 	/*
 	 * Ensure the peripheral block is sized to correctly cover the address range
@@ -525,12 +531,38 @@ static void build_mem_map(void)
 			 PTE_BLOCK_NON_SHARE |
 			 PTE_BLOCK_PXN | PTE_BLOCK_UXN;
 
-	for (i = 1, j = 0; i < ARRAY_SIZE(rbx_mem_map) - 1 && gd->dram[j].size; i++, j++) {
+	/*
+	 * Emit each DRAM bank, plus a device-memory entry for any gap between
+	 * it and the previous bank. Gaps are firmware-carved regions not
+	 * reported in the SMEM usable-RAM table, so they must not be folded
+	 * into a NORMAL/cacheable bank entry: treating them as MT_DEVICE_NGNRNE
+	 * (matching the pre-DRAM peripheral entry above) stops speculative
+	 * accesses instead of silently reading/caching whatever firmware left
+	 * there.
+	 */
+	i = 1;
+	prev_end = gd->dram[0].start;
+	for (j = 0; i < ARRAY_SIZE(rbx_mem_map) - 1 && gd->dram[j].size; j++) {
+		if (gd->dram[j].start > prev_end) {
+			mem_map[i].phys = prev_end;
+			mem_map[i].virt = mem_map[i].phys;
+			mem_map[i].size = gd->dram[j].start - prev_end;
+			mem_map[i].attrs = PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+					   PTE_BLOCK_NON_SHARE |
+					   PTE_BLOCK_PXN | PTE_BLOCK_UXN |
+					   PTE_BLOCK_RO;
+			i++;
+			if (i >= ARRAY_SIZE(rbx_mem_map) - 1)
+				break;
+		}
+
 		mem_map[i].phys = gd->dram[j].start;
 		mem_map[i].virt = mem_map[i].phys;
 		mem_map[i].size = gd->dram[j].size;
 		mem_map[i].attrs = PTE_BLOCK_MEMTYPE(MT_NORMAL) | \
 				   PTE_BLOCK_INNER_SHARE;
+		prev_end = gd->dram[j].start + gd->dram[j].size;
+		i++;
 	}
 
 	mem_map[i].phys = UINT64_MAX;
@@ -562,7 +594,7 @@ static int fdt_cmp_res(const void *v1, const void *v2)
 	return res1->start - res2->start;
 }
 
-#define N_RESERVED_REGIONS 64
+#define N_RESERVED_REGIONS 256
 
 /* Map and unmap reserved memory regions as appropriate.
  * Mark all no-map regions as PTE_TYPE_FAULT to prevent speculative access.
@@ -610,11 +642,25 @@ static void configure_reserved_memory(void)
 		 */
 		ptr = fdt_getprop(gd->fdt_blob, rmem, "reg", NULL);
 		if (ptr) {
-			/* Qualcomm devices use #address/size-cells = <2> but all reserved regions are within
-			 * the 32-bit address space. So we can cheat here for speed.
+			u64 rstart, rend;
+
+			/* Qualcomm devices use #address/size-cells = <2>. Reserved regions
+			 * are within the 32-bit space, so the low cells hold addr/size.
 			 */
-			res[i].start = fdt32_to_cpu(ptr[1]);
-			res[i].size = fdt32_to_cpu(ptr[3]);
+			rstart = fdt32_to_cpu(ptr[1]);
+			rend = rstart + fdt32_to_cpu(ptr[3]);
+
+			/* The MMU works at page (4K) granularity: mmu_change_region_attr_nobreak()
+			 * cannot map a sub-page region and would spin forever on one (e.g. the
+			 * 0x80-byte SCMI shmem mailboxes two-to-a-page at 0x87608000/0x87608180).
+			 * Page-align every region here so we protect the pages *containing* each
+			 * carveout. All sub-page reserved regions on Qualcomm SoCs seen so far are
+			 * driver-accessible (VALID), so rounding the enclosing page to VALID is
+			 * safe; a sub-page no-map (FAULT) region sharing a page with usable RAM
+			 * would need VALID-wins precedence handling — none exist on this SoC.
+			 */
+			res[i].start = rstart & ~((u64)SZ_4K - 1);
+			res[i].size = ALIGN(rend, SZ_4K) - res[i].start;
 			res[i].attrs = attrs;
 			i++;
 		}

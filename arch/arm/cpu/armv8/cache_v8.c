@@ -1063,6 +1063,15 @@ static void set_regions(u64 start, u64 size, u64 attrs, bool flag)
 				break;
 			}
 		}
+		if (level == 4) {
+			/* No level could map this granule — without this guard the
+			 * outer while(size>0) spins forever. Report and bail so the
+			 * offending region is visible instead of hanging.
+			 */
+			log_err("mmu_change_region_attr_nobreak: STUCK at start=0x%llx size=0x%llx (no level mapped)\n",
+			        (unsigned long long)start, (unsigned long long)size);
+			break;
+		}
 	}
 }
 

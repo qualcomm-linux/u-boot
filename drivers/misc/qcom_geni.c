@@ -634,7 +634,7 @@ int qcom_geni_fw_probe(struct udevice *dev)
 {
 	return qcom_geni_fw_initialise();
 }
-#else
+#elif IS_ENABLED(CONFIG_QCOM_GENI_FW_LOAD)
 EVENT_SPY_SIMPLE(EVT_LAST_STAGE_INIT, qcom_geni_fw_initialise);
 #endif
 
