@@ -40,3 +40,10 @@
 		};
 	};
 };
+
+/* Enter Qualcomm EDL/download mode via "reset -edl". */
+&{/psci} {
+	reboot-mode {
+		mode-edl = <0x80000000 0x00000001>;
+	};
+};
