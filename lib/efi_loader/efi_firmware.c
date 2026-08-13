@@ -52,9 +52,9 @@ struct fmp_payload_header {
  */
 struct fmp_state {
 	u32 fw_version;
-	u32 lowest_supported_version; /* not used */
-	u32 last_attempt_version; /* not used */
-	u32 last_attempt_status; /* not used */
+	u32 lowest_supported_version; /* not used - read from DTB for security */
+	u32 last_attempt_version;     /* used for esrt tracking */
+	u32 last_attempt_status;      /* used for esrt tracking */
 };
 
 /**
@@ -191,6 +191,48 @@ static void efi_firmware_get_lsv_from_dtb(u8 image_index,
 }
 
 /**
+ * efi_firmware_set_last_attempt - set last attempt information
+ * @state:		Pointer to fmp state
+ * @attempt_version:	Version that was attempted
+ * @attempt_status:	Status of the attempt
+ *
+ * Set the last attempt version and status in the fmp_state structure.
+ */
+static void efi_firmware_set_last_attempt(struct fmp_state *state,
+					  u32 attempt_version,
+					  u32 attempt_status)
+{
+	state->last_attempt_version = attempt_version;
+	state->last_attempt_status = attempt_status;
+}
+
+/**
+ * efi_firmware_map_error_to_status - map internal errors to UEFI status codes
+ * @error:	Internal error code
+ *
+ * Map U-Boot internal error codes to UEFI-compliant last attempt status codes.
+ *
+ * Return: UEFI last attempt status code
+ */
+static u32 efi_firmware_map_error_to_status(efi_status_t error)
+{
+	switch (error) {
+	case EFI_SUCCESS:
+		return LAST_ATTEMPT_STATUS_SUCCESS;
+	case EFI_OUT_OF_RESOURCES:
+		return LAST_ATTEMPT_STATUS_ERROR_INSUFFICIENT_RESOURCES;
+	case EFI_INVALID_PARAMETER:
+		return LAST_ATTEMPT_STATUS_ERROR_INCORRECT_VERSION;
+	case EFI_SECURITY_VIOLATION:
+		return LAST_ATTEMPT_STATUS_ERROR_AUTH_ERROR;
+	case EFI_UNSUPPORTED:
+		return LAST_ATTEMPT_STATUS_ERROR_INVALID_FORMAT;
+	default:
+		return LAST_ATTEMPT_STATUS_ERROR_UNSUCCESSFUL;
+	}
+}
+
+/**
  * efi_firmware_fill_version_info - fill the version information
  * @image_info:		Image information
  * @fw_array:		Pointer to size of new image
@@ -237,8 +279,15 @@ void efi_firmware_fill_version_info(struct efi_firmware_image_descriptor *image_
 
 	ret = efi_get_variable_int(varname, &fw_array->image_type_id,
 				   NULL, &size, var_state, NULL);
-	if (ret == EFI_SUCCESS && expected_size == size)
+	if (ret == EFI_SUCCESS && expected_size == size) {
 		image_info->version = var_state[active_index].fw_version;
+		image_info->last_attempt_version = var_state[active_index].last_attempt_version;
+		image_info->last_attempt_status = var_state[active_index].last_attempt_status;
+	} else {
+		/* Default values if no previous state exists */
+		image_info->last_attempt_version = 0;
+		image_info->last_attempt_status = LAST_ATTEMPT_STATUS_SUCCESS;
+	}
 
 	free(var_state);
 }
@@ -427,6 +476,10 @@ efi_status_t efi_firmware_capsule_authenticate(const void **p_image,
  * @image_index:	image index
  *
  * Update the FmpStateXXXX variable with the firmware update state.
+ * On successful update (last_attempt_status == LAST_ATTEMPT_STATUS_SUCCESS),
+ * updates fw_version to the new version.
+ * On failed update, preserves the old fw_version.
+ * Always updates last_attempt_version and last_attempt_status.
  *
  * Return:		status code
  */
@@ -471,11 +524,19 @@ efi_status_t efi_firmware_set_fmp_state_var(struct fmp_state *state, u8 image_in
 		memset(var_state, 0, num_banks * sizeof(*var_state));
 
 	/*
-	 * Only the fw_version is set here.
+	 * Set fw_version and last attempt information.
 	 * lowest_supported_version in FmpState variable is ignored since
 	 * it can be tampered if the file based EFI variable storage is used.
+	 *
+	 * Only update fw_version if the update succeeded.
+	 * On failure, preserve the old fw_version to maintain accurate ESRT state.
 	 */
-	var_state[update_bank].fw_version = state->fw_version;
+	if (state->last_attempt_status == LAST_ATTEMPT_STATUS_SUCCESS)
+		var_state[update_bank].fw_version = state->fw_version;
+	/* else: keep existing fw_version (don't update on failure) */
+
+	var_state[update_bank].last_attempt_version = state->last_attempt_version;
+	var_state[update_bank].last_attempt_status = state->last_attempt_status;
 
 	size = num_banks * sizeof(*var_state);
 	ret = efi_set_variable_int(varname, image_type_id,
