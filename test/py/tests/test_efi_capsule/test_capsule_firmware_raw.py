@@ -260,3 +260,48 @@ class TestEfiCapsuleFirmwareRaw:
 
         # ensure that SANDBOX_UBOOT_ENV_IMAGE_GUID is reported.
         assert '9E339473-C2EB-530A-A69B-0CD6BBBED40E' in output
+
+    def test_efi_capsule_fw7(
+            self, u_boot_config, ubman, efi_capsule_data):
+        """ Test Case 7
+        Update U-Boot on SPI Flash via an image_index whose DFU alt number
+        is resolved through board/sandbox/sandbox.c's
+        efi_firmware_get_dfu_alt_num() override rather than the default
+        (image_index - 1), proving the override is honored.
+        0x100000-0x150000: U-Boot binary (but dummy)
+        """
+        disk_img = efi_capsule_data
+        capsule_files = ['Test06']
+        with ubman.log.section('Test Case 7-a, before reboot'):
+            capsule_setup(ubman, disk_img, '0x0000000000000004')
+            init_content(ubman, '100000', 'u-boot.bin.old', 'Old')
+            place_capsule_file(ubman, capsule_files)
+
+        capsule_early = u_boot_config.buildconfig.get(
+            'config_efi_capsule_on_disk_early')
+        capsule_auth = u_boot_config.buildconfig.get(
+            'config_efi_capsule_authenticate')
+
+        # reboot
+        ubman.restart_uboot(expect_reset = capsule_early)
+
+        with ubman.log.section('Test Case 7-b, after reboot'):
+            if not capsule_early:
+                exec_manual_update(ubman, disk_img, capsule_files)
+
+            # make sure the dfu_alt_info exists because it is required for making ESRT.
+            output = ubman.run_command_list([
+                'env set dfu_alt_info "sf 0:0=u-boot-bin raw 0x100000 0x50000;u-boot-env raw 0x150000 0x200000"',
+                'efidebug capsule esrt'])
+
+            # ensure that SANDBOX_ALTIMG_IMAGE_GUID is in the ESRT.
+            assert '2D137324-092D-5F04-A62C-A7B2442CB0EE' in ''.join(output)
+
+            check_file_removed(ubman, disk_img, capsule_files)
+
+            # the override maps image_index 3 to dfu_alt_num 0, the same
+            # alt as SANDBOX-UBOOT (image_index 1). Without the override,
+            # the default (image_index - 1 = 2) does not exist in
+            # dfu_alt_info and the write would fail, leaving content 'Old'.
+            expected = 'u-boot:Old' if capsule_auth else 'u-boot:New'
+            verify_content(ubman, '100000', expected)
