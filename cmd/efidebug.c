@@ -294,6 +294,104 @@ static int do_efi_capsule_res(struct cmd_tbl *cmdtp, int flag,
 	return CMD_RET_SUCCESS;
 }
 
+/**
+ * do_efi_capsule_images() - list firmware images updatable by capsule
+ *
+ * @cmdtp:	Command table
+ * @flag:	Command flag
+ * @argc:	Number of arguments
+ * @argv:	Argument array
+ * Return:	CMD_RET_SUCCESS on success, CMD_RET_FAILURE on failure
+ *
+ * Implement efidebug "capsule images" sub-command.
+ * Walk every Firmware Management Protocol instance and print the image
+ * descriptors it reports, i.e. the firmware images a capsule can target
+ * on this board along with their name, index and type GUID.
+ *
+ *     efidebug capsule images
+ */
+static int do_efi_capsule_images(struct cmd_tbl *cmdtp, int flag,
+				 int argc, char * const argv[])
+{
+	struct efi_firmware_management_protocol *fmp;
+	struct efi_firmware_image_descriptor *image_info, *desc;
+	efi_uintn_t info_size, descriptor_size, no_handles;
+	u32 descriptor_version, package_version;
+	u16 *package_version_name;
+	u8 descriptor_count;
+	efi_handle_t *handles;
+	efi_status_t ret;
+	int i, j;
+
+	if (argc != 1)
+		return CMD_RET_USAGE;
+
+	ret = EFI_CALL(efi_locate_handle_buffer(BY_PROTOCOL,
+						&efi_guid_firmware_management_protocol,
+						NULL, &no_handles, &handles));
+	if (ret != EFI_SUCCESS || no_handles == 0) {
+		printf("No firmware images found\n");
+		return CMD_RET_SUCCESS;
+	}
+
+	printf("Image Index    Firmware Name         Image Type GUID\n");
+	printf("===========    ===================== ====================================\n");
+
+	for (i = 0; i < no_handles; i++) {
+		struct efi_handler *handler;
+
+		ret = efi_search_protocol(handles[i],
+					  &efi_guid_firmware_management_protocol,
+					  &handler);
+		if (ret != EFI_SUCCESS)
+			continue;
+		fmp = handler->protocol_interface;
+
+		info_size = 0;
+		image_info = NULL;
+		descriptor_version = 0;
+		descriptor_count = 0;
+		descriptor_size = 0;
+		package_version = 0;
+		package_version_name = NULL;
+		ret = EFI_CALL(fmp->get_image_info(fmp, &info_size, image_info,
+						   &descriptor_version,
+						   &descriptor_count,
+						   &descriptor_size,
+						   &package_version,
+						   &package_version_name));
+		if (ret != EFI_BUFFER_TOO_SMALL)
+			continue;
+
+		image_info = malloc(info_size);
+		if (!image_info)
+			continue;
+
+		ret = EFI_CALL(fmp->get_image_info(fmp, &info_size, image_info,
+						   &descriptor_version,
+						   &descriptor_count,
+						   &descriptor_size,
+						   &package_version,
+						   &package_version_name));
+		if (ret == EFI_SUCCESS &&
+		    descriptor_version == EFI_FIRMWARE_IMAGE_DESCRIPTOR_VERSION) {
+			for (j = 0, desc = image_info; j < descriptor_count;
+			     j++, desc = (void *)desc + descriptor_size)
+				printf("%11d    %-21ls %pUl\n",
+				       desc->image_index,
+				       desc->image_id_name ? desc->image_id_name : u"",
+				       &desc->image_type_id);
+		}
+
+		efi_free_pool(package_version_name);
+		free(image_info);
+	}
+
+	efi_free_pool(handles);
+
+	return CMD_RET_SUCCESS;
+}
+
 static struct cmd_tbl cmd_efidebug_capsule_sub[] = {
 	U_BOOT_CMD_MKENT(update, CONFIG_SYS_MAXARGS, 1, do_efi_capsule_update,
 			 "", ""),
@@ -308,6 +406,8 @@ static struct cmd_tbl cmd_efidebug_capsule_sub[] = {
 			 "", ""),
 #endif
 	U_BOOT_CMD_MKENT(result, CONFIG_SYS_MAXARGS, 1, do_efi_capsule_res,
+			 "", ""),
+	U_BOOT_CMD_MKENT(images, CONFIG_SYS_MAXARGS, 1, do_efi_capsule_images,
 			 "", ""),
 };
 
@@ -1710,6 +1810,8 @@ U_BOOT_LONGHELP(efidebug,
 	"  - show capsule information\n"
 	"efidebug capsule result [<capsule result var>]\n"
 	"  - show a capsule update result\n"
+	"efidebug capsule images\n"
+	"  - list firmware images updatable by capsule\n"
 #ifdef CONFIG_EFI_ESRT
 	"efidebug capsule esrt\n"
 	"  - print the ESRT\n"
