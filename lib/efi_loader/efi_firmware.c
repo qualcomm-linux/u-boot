@@ -823,8 +823,17 @@ efi_status_t EFIAPI efi_firmware_raw_set_image(
 
 	status = efi_firmware_verify_image(&image, &image_size, image_index,
 					   &state);
-	if (status != EFI_SUCCESS)
+	if (status != EFI_SUCCESS) {
+		/* Set last attempt information for failed verification */
+		efi_firmware_set_last_attempt(&state, state.fw_version,
+					      efi_firmware_map_error_to_status(status));
+		efi_firmware_set_fmp_state_var(&state, image_index);
 		return EFI_EXIT(status);
+	}
+
+	/* Set last attempt version before starting the update */
+	efi_firmware_set_last_attempt(&state, state.fw_version,
+				      LAST_ATTEMPT_STATUS_SUCCESS);
 
 	/*
 	 * "dfu_alt_info" must be set before fwu_get_dfu_alt_num(), which
@@ -835,12 +844,18 @@ efi_status_t EFIAPI efi_firmware_raw_set_image(
 		orig_dfu_env = strdup(orig_dfu_env);
 		if (!orig_dfu_env) {
 			log_err("strdup() failed!\n");
+			efi_firmware_set_last_attempt(&state, state.fw_version,
+						      efi_firmware_map_error_to_status(EFI_OUT_OF_RESOURCES));
+			efi_firmware_set_fmp_state_var(&state, image_index);
 			return EFI_EXIT(EFI_OUT_OF_RESOURCES);
 		}
 	}
 	if (env_set("dfu_alt_info", update_info.dfu_string)) {
 		log_err("Unable to set env variable \"dfu_alt_info\"!\n");
 		free(orig_dfu_env);
+		efi_firmware_set_last_attempt(&state, state.fw_version,
+					      efi_firmware_map_error_to_status(EFI_DEVICE_ERROR));
+		efi_firmware_set_fmp_state_var(&state, image_index);
 		return EFI_EXIT(EFI_DEVICE_ERROR);
 	}
 
@@ -871,9 +886,16 @@ restore_dfu:
 
 	free(orig_dfu_env);
 
-	if (ret)
+	if (ret) {
+		efi_firmware_set_last_attempt(&state, state.fw_version,
+					      efi_firmware_map_error_to_status(EFI_DEVICE_ERROR));
+		efi_firmware_set_fmp_state_var(&state, image_index);
 		return EFI_EXIT(EFI_DEVICE_ERROR);
+	}
 
+	/* Update successful - set success status */
+	efi_firmware_set_last_attempt(&state, state.fw_version,
+				      LAST_ATTEMPT_STATUS_SUCCESS);
 	efi_firmware_set_fmp_state_var(&state, image_index);
 
 	return EFI_EXIT(EFI_SUCCESS);
