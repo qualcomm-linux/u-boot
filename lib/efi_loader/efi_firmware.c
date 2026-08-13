@@ -80,6 +80,22 @@ efi_guid_t *efi_firmware_get_image_type_id(u8 image_index)
 	return NULL;
 }
 
+/**
+ * efi_firmware_get_dfu_alt_num - get the DFU alt setting number for an image
+ * @image_index:	image index
+ *
+ * Return the DFU alt setting number to use when writing the image
+ * identified by @image_index. The generic default derives it positionally
+ * from @image_index; a platform whose fw_images[] is not laid out 1:1 with
+ * DFU alt numbers should override this function.
+ *
+ * Return:		DFU alt setting number
+ */
+u8 __weak efi_firmware_get_dfu_alt_num(u8 image_index)
+{
+	return image_index - 1;
+}
+
 /* Place holder; not supported */
 static
 efi_status_t EFIAPI efi_firmware_get_image_unsupported(
@@ -846,9 +862,10 @@ efi_status_t EFIAPI efi_firmware_raw_set_image(
 	/*
 	 * dfu_alt_num is assigned from 0 while image_index starts from 1.
 	 * dfu_alt_num is calculated by (image_index - 1) when multi bank update
-	 * is not used.
+	 * is not used. A platform may override efi_firmware_get_dfu_alt_num()
+	 * if its fw_images[] is not laid out 1:1 with DFU alt numbers.
 	 */
-	dfu_alt_num = image_index - 1;
+	dfu_alt_num = efi_firmware_get_dfu_alt_num(image_index);
 	if (IS_ENABLED(CONFIG_FWU_MULTI_BANK_UPDATE)) {
 		/*
 		 * Based on the value of update bank, derive the
