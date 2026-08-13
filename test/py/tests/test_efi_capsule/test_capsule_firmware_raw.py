@@ -238,3 +238,25 @@ class TestEfiCapsuleFirmwareRaw:
             check_file_removed(ubman, disk_img, capsule_files)
 
             verify_content(ubman, '100000', 'u-boot:Old')
+
+    def test_efi_capsule_fw6(
+            self, u_boot_config, ubman, efi_capsule_data):
+        """ Test Case 6
+        List the firmware images updatable by capsule with
+        'efidebug capsule images' and check the images sandbox exposes
+        for raw capsule updates
+        """
+        ubman.restart_uboot()
+
+        output = ubman.run_command('efidebug capsule images')
+
+        # ensure that SANDBOX-UBOOT and SANDBOX-UBOOT-ENV are both listed,
+        # along with the image index each one is exposed at.
+        assert '1' in output and 'SANDBOX-UBOOT' in output
+        assert '2' in output and 'SANDBOX-UBOOT-ENV' in output
+
+        # ensure that SANDBOX_UBOOT_IMAGE_GUID is reported.
+        assert '985F2937-7C2E-5E9A-8A5E-8E063312964B' in output
+
+        # ensure that SANDBOX_UBOOT_ENV_IMAGE_GUID is reported.
+        assert '9E339473-C2EB-530A-A69B-0CD6BBBED40E' in output
