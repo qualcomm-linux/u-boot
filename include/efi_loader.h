@@ -1187,11 +1187,15 @@ efi_status_t efi_capsule_authenticate(const void *capsule,
  * @fw_name:		Name of the firmware image
  * @image_index:	Image Index, same as value passed to SetImage FMP
  *                      function
+ * @dfu_alt_num:	DFU alt setting number for this image. Only consulted
+ *                      by a platform's efi_firmware_get_dfu_alt_num()
+ *                      override
  */
 struct efi_fw_image {
 	efi_guid_t image_type_id;
 	u16 *fw_name;
 	u8 image_index;
+	u8 dfu_alt_num;
 };
 
 /**
@@ -1239,6 +1243,19 @@ efi_status_t efi_ecpt_register(void);
  */
 efi_status_t efi_esrt_populate(void);
 efi_status_t efi_load_capsule_drivers(void);
+
+/**
+ * efi_firmware_get_dfu_alt_num() - get the DFU alt setting number for an image
+ * @image_index:	image index
+ *
+ * Return the DFU alt setting number to use when writing the image
+ * identified by @image_index. Weak default derives it positionally as
+ * (image_index - 1); a platform whose fw_images[] is not laid out 1:1 with
+ * DFU alt numbers should override this function.
+ *
+ * Return:		DFU alt setting number
+ */
+u8 efi_firmware_get_dfu_alt_num(u8 image_index);
 
 efi_status_t platform_get_eventlog(struct udevice *dev, u64 *addr, u32 *sz);
 
