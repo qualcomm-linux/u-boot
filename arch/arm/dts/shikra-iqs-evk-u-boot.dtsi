@@ -12,6 +12,27 @@
 		mode-bootloader = <0x02>;
 		mode-recovery   = <0x01>;
 	};
+
+	qcom_hwinfo: qcom-hwinfo {
+		compatible = "qcom,hwinfo";
+
+		imem = <&{/soc@0/sram@c11e000}>;
+		imem-boot-cookie-offset = <0x0>;
+
+		tcsr = <&tcsr_regs>;
+		tcsr-hw-version-offset = <0x8000>;
+	};
+};
+
+&{/soc@0/sram@c11e000} {
+	compatible = "qcom,shikra-imem", "syscon", "simple-mfd";
+};
+
+/* Enter Qualcomm EDL/download mode via "reset -edl". */
+&{/psci} {
+	reboot-mode {
+		mode-edl = <0x80000000 0x00000001>;
+	};
 };
 
 &rng {
