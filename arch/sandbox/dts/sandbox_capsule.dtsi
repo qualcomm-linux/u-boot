@@ -166,4 +166,16 @@
 			};
 		};
 	};
+
+	capsule12 {
+		filename = "Test06";
+		efi-capsule {
+			image-index = <0x3>;
+			image-guid = SANDBOX_ALTIMG_IMAGE_GUID;
+
+			text {
+				text = "u-boot:New";
+			};
+		};
+	};
 };
