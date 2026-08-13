@@ -47,6 +47,13 @@ config PHY_QCOM_QMP_USB
 	  Enable this to support the QMP USB PHY transceiver that is used
 	  with USB3 controllers on Qualcomm chips.
 
+config PHY_QCOM_QMP_USB3_LEGACY
+	bool "Qualcomm QMP USB3-only legacy PHY driver"
+	depends on PHY && ARCH_SNAPDRAGON
+	help
+	  Enable this to support the legacy USB3-only QMP PHY (v3) found on
+	  older Qualcomm chipsets such as QCM2290/QCS615 and derivatives.
+
 config PHY_QCOM_QUSB2
 	bool "Qualcomm USB QUSB2 PHY driver"
 	depends on PHY && ARCH_SNAPDRAGON
