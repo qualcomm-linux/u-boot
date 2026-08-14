@@ -49,6 +49,10 @@
 	status = "okay";
 };
 
+&usb_qmpphy {
+	status = "okay";
+};
+
 &pm8150_0 {
 	/* Virtual NVMEM node for PON-based reboot reason storage */
 	nvram@800 {
