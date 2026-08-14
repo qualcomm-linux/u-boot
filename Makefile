@@ -2026,7 +2026,9 @@ SPL_REMAKE_ELF_LDSCRIPT := $(addprefix $(srctree)/,$(CONFIG_SPL_REMAKE_ELF_LDSCR
 spl/u-boot-spl-elf.lds: $(SPL_REMAKE_ELF_LDSCRIPT) prepare FORCE
 	$(call if_changed_dep,cpp_lds)
 
-u-boot-elf.lds: arch/u-boot-elf.lds prepare FORCE
+REMAKE_ELF_LDSCRIPT := $(addprefix $(srctree)/,$(CONFIG_REMAKE_ELF_LDSCRIPT:"%"=%))
+
+u-boot-elf.lds: $(REMAKE_ELF_LDSCRIPT) prepare FORCE
 	$(call if_changed_dep,cpp_lds)
 
 PHONY += prepare0
