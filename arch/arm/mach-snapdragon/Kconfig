@@ -73,6 +73,20 @@ config QCOM_HWDETECT
 	  Hardware parameter detection from SMEM and TCSR for
 	  DTB selection and other platform subsystems.
 
+config QCOM_TMEL_ELF
+	string "TME Elf to concatenate with U-Boot SPL MBN image"
+	depends on SPL
+	help
+	  Path of the TME Elf file to be concatenated to u-boot.mbn to create
+	  boot rom expected multi-elf image
+
+config QCOM_GENERATE_MBN
+	bool "Generate an MBN-compatible ELF binary"
+	help
+	  Enable this if you intend to flash U-Boot as a first-stage bootloader.
+	  The build system will generate a board-specific ELF file with the appropriate
+	  MBN hash segments and test keys.
+
 choice
 	prompt "Qualcomm boot0.h workaround"
 	optional
