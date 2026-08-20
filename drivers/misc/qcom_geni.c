@@ -176,6 +176,7 @@ static int load_se_firmware(struct qup_se_rsc *rsc, bool elf, void *info)
 	const u32 *fw_val_arr, *cfg_val_arr;
 	const u8 *cfg_idx_arr;
 	u32 i, reg_value, mask, ramn_cnt;
+	u32 hw_version, hw_major, hw_minor, rx_fifo_depth_mask;
 	int ret;
 
 	if (elf) {
@@ -251,8 +252,17 @@ static int load_se_firmware(struct qup_se_rsc *rsc, bool elf, void *info)
 			       rsc->base + GENI_CFG_REG0 + (cfg_idx_arr[i] * sizeof(u32)));
 
 	/* Configure condition for assertion of RX_RFR_WATERMARK condition. */
-	reg_value = readl_relaxed(rsc->base + QUPV3_SE_HW_PARAM_1);
-	mask = (reg_value >> RX_FIFO_WIDTH_BIT) & RX_FIFO_WIDTH_MASK;
+	hw_version = readl_relaxed(rsc->wrapper_base + QUP_HW_VER_REG);
+	hw_major = GENI_SE_VERSION_MAJOR(hw_version);
+	hw_minor = GENI_SE_VERSION_MINOR(hw_version);
+
+	if ((hw_major == 3 && hw_minor >= 10) || hw_major > 3)
+		rx_fifo_depth_mask = RX_FIFO_DEPTH_MSK_256_BYTES;
+	else
+		rx_fifo_depth_mask = RX_FIFO_DEPTH_MSK;
+
+	reg_value = readl_relaxed(rsc->base + SE_HW_PARAM_1);
+	mask = (reg_value & rx_fifo_depth_mask) >> RX_FIFO_DEPTH_SHFT;
 	writel_relaxed(mask - 2, rsc->base + GENI_RX_RFR_WATERMARK_REG);
 
 	/* Let hardware control CGC */
