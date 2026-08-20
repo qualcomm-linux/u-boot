@@ -29,11 +29,6 @@
 			no-map;
 		};
 
-		pil_reserved_mem: pil-reserved@84300000 {
-			reg = <0x0 0x84300000 0x0 0x16b00000>;
-			no-map;
-		};
-
 		display_mem: display@e1000000 {
 			reg = <0x0 0xe1000000 0x0 0x2400000>;
 			no-map;
