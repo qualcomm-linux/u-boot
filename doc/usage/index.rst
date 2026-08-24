@@ -16,6 +16,7 @@ Use U-Boot
    cmdline
    semihosting
    measured_boot
+   efi_secureboot
    upl
 
 Shell commands
