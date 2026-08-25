@@ -5,6 +5,7 @@
 
 #include <blk.h>
 #include <div64.h>
+#include <env.h>
 #include <fastboot.h>
 #include <fastboot-internal.h>
 #include <fb_block.h>
@@ -126,62 +127,172 @@ static lbaint_t fb_block_sparse_reserve(struct sparse_storage *info,
 }
 
 /**
- * parse_device_partition() - Parse and validate device:partition format
- * @part_name: Input string in format "N:partition" or "partition"
- * @device: Output device number
- * @partition_name: Output partition name pointer (can be NULL)
+ * FASTBOOT_BLOCK_IFACE_LEN - max length of a block interface name, including NUL
+ */
+#define FASTBOOT_BLOCK_IFACE_LEN 16
+
+/**
+ * block_interface_override - runtime-set block interface name, empty if unset
+ */
+static char block_interface_override[FASTBOOT_BLOCK_IFACE_LEN];
+/**
+ * block_device_override - runtime-set block device number, -1 if unset
+ */
+static int block_device_override = -1;
+
+/**
+ * fb_block_interface() - Resolve the block interface name to use
  *
- * Parses the input string to extract device number and partition name.
- * If no device is specified, uses the default from config.
+ * Returns the runtime override set via fastboot_block_set_target() if one
+ * is active, otherwise falls back to the build-time config default.
+ */
+static const char *fb_block_interface(void)
+{
+	if (block_interface_override[0])
+		return block_interface_override;
+
+	return config_opt_enabled(CONFIG_FASTBOOT_FLASH_BLOCK,
+				  CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME, NULL);
+}
+
+/**
+ * fb_block_device() - Resolve the block device number to use
+ *
+ * Returns the runtime override set via fastboot_block_set_target() if one
+ * is active, otherwise falls back to the build-time config default.
+ */
+static int fb_block_device(void)
+{
+	if (block_device_override >= 0)
+		return block_device_override;
+
+	return config_opt_enabled(CONFIG_FASTBOOT_FLASH_BLOCK,
+				  CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID, -1);
+}
+
+int fastboot_block_set_target(const char *interface, int device)
+{
+	if (interface) {
+		if (strlen(interface) >= sizeof(block_interface_override))
+			return -EINVAL;
+		strlcpy(block_interface_override, interface,
+			sizeof(block_interface_override));
+	}
+
+	if (device >= 0)
+		block_device_override = device;
+
+	return 0;
+}
+
+static bool is_all_digits(const char *s, size_t len)
+{
+	size_t i;
+
+	if (!len)
+		return false;
+
+	for (i = 0; i < len; i++)
+		if (s[i] < '0' || s[i] > '9')
+			return false;
+
+	return true;
+}
+
+/**
+ * parse_device_partition() - Parse [<interface>:][<device>:]<partition> format
+ * @part_name: Input string, e.g. "mtd:0:boot", "0:boot", or "boot"
+ * @interface_buf: Output buffer for the interface name, FASTBOOT_BLOCK_IFACE_LEN bytes
+ * @device: Output device number
+ * @partition_name: Output partition name pointer, using the device-tier-stripped
+ *	interpretation
+ * @literal_partition_name: Optional output pointer to the unstripped interpretation
+ *	of the device tier (e.g. "0:SBL" instead of "SBL"), or NULL if no device-tier
+ *	stripping occurred. Pass NULL if the caller doesn't need this.
+ *
+ * Parses at most two leading ':'-delimited segments: a non-numeric segment is
+ * an interface override, a numeric segment is a device override. Whatever
+ * remains, colons and all, is left untouched as the partition name.
+ *
  * Returns: 0 on success, -EINVAL if format is invalid
  */
-static int parse_device_partition(const char *part_name, int *device,
-				  const char **partition_name)
+static int parse_device_partition(const char *part_name, char *interface_buf,
+				  int *device, const char **partition_name,
+				  const char **literal_partition_name)
 {
+	const char *default_interface = fb_block_interface();
+	const char *p = part_name;
 	const char *colon_pos;
+	size_t iface_len;
 
-	*device = config_opt_enabled(CONFIG_FASTBOOT_FLASH_BLOCK,
-				     CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID, -1);
+	strlcpy(interface_buf, default_interface ? default_interface : "",
+		FASTBOOT_BLOCK_IFACE_LEN);
+	*device = fb_block_device();
+	if (literal_partition_name)
+		*literal_partition_name = NULL;
 
-	/* Check for colon in partition name */
-	colon_pos = strchr(part_name, ':');
+	colon_pos = strchr(p, ':');
 
 	/* Reject invalid format like ":partition" */
-	if (colon_pos && colon_pos == part_name)
+	if (colon_pos && colon_pos == p)
 		return -EINVAL;
 
-	/* Override if device:partition format detected */
-	if (colon_pos && colon_pos > part_name) {
-		*device = simple_strtoul(part_name, NULL, 10);
-		if (partition_name)
-			*partition_name = colon_pos + 1;
-	} else {
-		if (partition_name)
-			*partition_name = part_name;
+	/* Leading non-numeric segment is an interface override */
+	if (colon_pos && !is_all_digits(p, colon_pos - p)) {
+		iface_len = colon_pos - p;
+		if (iface_len >= FASTBOOT_BLOCK_IFACE_LEN)
+			return -EINVAL;
+
+		memcpy(interface_buf, p, iface_len);
+		interface_buf[iface_len] = '\0';
+
+		p = colon_pos + 1;
+		colon_pos = strchr(p, ':');
+
+		if (colon_pos && colon_pos == p)
+			return -EINVAL;
 	}
+
+	/* Leading numeric segment of what remains is a device override */
+	if (colon_pos && is_all_digits(p, colon_pos - p)) {
+		*device = simple_strtoul(p, NULL, 10);
+		if (literal_partition_name)
+			*literal_partition_name = p;
+		p = colon_pos + 1;
+	}
+
+	*partition_name = p;
 
 	return 0;
 }
 
 /**
  * is_partition_table_name() - Check if name matches partition table target
- * @part_name: Partition name to check
+ * @part_name: Partition name to check (already stripped of interface/device tiers)
  * @table_name: Config name for partition table (e.g., "gpt", "mbr")
  *
- * Returns: true if part_name matches table_name (with or without device prefix)
+ * Returns: true if part_name matches table_name
  */
 static bool is_partition_table_name(const char *part_name, const char *table_name)
 {
-	const char *colon_pos;
+	return strcmp(part_name, table_name) == 0;
+}
 
-	if (strcmp(part_name, table_name) == 0)
-		return true;
+/**
+ * fastboot_block_resolve_alias() - Look up fastboot_partition_alias_<name>
+ * @name: Candidate partition name
+ *
+ * Returns: the aliased literal partition name, or NULL if no alias is defined
+ */
+static const char *fastboot_block_resolve_alias(const char *name)
+{
+	/* strlen("fastboot_partition_alias_") + PART_NAME_LEN + 1 */
+	char env_alias_name[25 + PART_NAME_LEN + 1];
 
-	colon_pos = strchr(part_name, ':');
-	if (colon_pos && colon_pos > part_name && strcmp(colon_pos + 1, table_name) == 0)
-		return true;
+	strlcpy(env_alias_name, "fastboot_partition_alias_", sizeof(env_alias_name));
+	strlcat(env_alias_name, name, sizeof(env_alias_name));
 
-	return false;
+	return env_get(env_alias_name);
 }
 
 int fastboot_block_get_part_info(const char *part_name,
@@ -189,25 +300,24 @@ int fastboot_block_get_part_info(const char *part_name,
 				 struct disk_partition *part_info,
 				 char *response)
 {
-	int ret;
-	const char *interface = config_opt_enabled(CONFIG_FASTBOOT_FLASH_BLOCK,
-						   CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME,
-						   NULL);
-	int device;
-	const char *partition_name;
+	char interface[FASTBOOT_BLOCK_IFACE_LEN];
+	int device, ret, literal_ret;
+	const char *partition_name, *literal_partition_name, *aliased_name;
+	struct disk_partition literal_info;
 
 	if (!part_name || !strcmp(part_name, "")) {
 		fastboot_fail("partition not given", response);
 		return -ENOENT;
 	}
 
-	if (!interface || !strcmp(interface, "")) {
-		fastboot_fail("block interface isn't provided", response);
+	if (parse_device_partition(part_name, interface, &device,
+				   &partition_name, &literal_partition_name) < 0) {
+		fastboot_fail("invalid partition name format", response);
 		return -EINVAL;
 	}
 
-	if (parse_device_partition(part_name, &device, &partition_name) < 0) {
-		fastboot_fail("invalid partition name format", response);
+	if (!interface[0]) {
+		fastboot_fail("block interface isn't provided", response);
 		return -EINVAL;
 	}
 
@@ -217,7 +327,30 @@ int fastboot_block_get_part_info(const char *part_name,
 		return -ENODEV;
 	}
 
+	/* An alias is an explicit, unambiguous statement of intent */
+	aliased_name = fastboot_block_resolve_alias(partition_name);
+	if (aliased_name) {
+		partition_name = aliased_name;
+		literal_partition_name = NULL;
+	}
+
 	ret = part_get_info_by_name(*dev_desc, partition_name, part_info);
+
+	if (literal_partition_name) {
+		literal_ret = part_get_info_by_name(*dev_desc, literal_partition_name,
+						    &literal_info);
+
+		if (ret >= 0 && literal_ret >= 0 && part_info->start != literal_info.start) {
+			fastboot_fail("ambiguous partition name, define an alias", response);
+			return -EINVAL;
+		}
+
+		if (ret < 0 && literal_ret >= 0) {
+			*part_info = literal_info;
+			ret = literal_ret;
+		}
+	}
+
 	if (ret < 0)
 		fastboot_fail("failed to get partition info", response);
 
@@ -382,33 +515,29 @@ void fastboot_block_flash_write(const char *part_name, void *download_buffer,
 	struct blk_desc *dev_desc;
 	struct disk_partition part_info;
 
-#if CONFIG_IS_ENABLED(EFI_PARTITION)
-	if (is_partition_table_name(part_name, CONFIG_FASTBOOT_GPT_NAME)) {
+	if (CONFIG_IS_ENABLED(EFI_PARTITION) || CONFIG_IS_ENABLED(DOS_PARTITION)) {
+		char interface[FASTBOOT_BLOCK_IFACE_LEN];
+		const char *partition_name;
 		int device;
-		const char *interface = config_opt_enabled(CONFIG_FASTBOOT_FLASH_BLOCK,
-							   CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME,
-							   NULL);
 
-		parse_device_partition(part_name, &device, NULL);
-		fastboot_flash_gpt_partition_table(interface, device,
-						   download_buffer, response);
-		return;
-	}
+		if (!parse_device_partition(part_name, interface, &device, &partition_name, NULL)) {
+#if CONFIG_IS_ENABLED(EFI_PARTITION)
+			if (is_partition_table_name(partition_name, CONFIG_FASTBOOT_GPT_NAME)) {
+				fastboot_flash_gpt_partition_table(interface, device,
+								   download_buffer, response);
+				return;
+			}
 #endif
 
 #if CONFIG_IS_ENABLED(DOS_PARTITION)
-	if (is_partition_table_name(part_name, CONFIG_FASTBOOT_MBR_NAME)) {
-		int device;
-		const char *interface = config_opt_enabled(CONFIG_FASTBOOT_FLASH_BLOCK,
-							   CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME,
-							   NULL);
-
-		parse_device_partition(part_name, &device, NULL);
-		fastboot_flash_mbr_partition_table(interface, device,
-						   download_buffer, response);
-		return;
-	}
+			if (is_partition_table_name(partition_name, CONFIG_FASTBOOT_MBR_NAME)) {
+				fastboot_flash_mbr_partition_table(interface, device,
+								   download_buffer, response);
+				return;
+			}
 #endif
+		}
+	}
 
 	if (fastboot_block_get_part_info(part_name, &dev_desc, &part_info, response) < 0)
 		return;

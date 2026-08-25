@@ -150,31 +150,66 @@ their names.
 Device Selection for Block Devices
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-When using ``FASTBOOT_FLASH_BLOCK``, you can specify which block device to
-target by prefixing the partition name with the device number and a colon.
+When using ``FASTBOOT_FLASH_BLOCK``, you can specify which block interface and
+device to target by prefixing the partition name.
 
 Syntax::
 
-    <device_number>:<partition_name>
+    [<interface>:][<device_number>:]<partition_name>
 
 Examples::
 
-    fastboot flash 0:boot boot.img        # Flash to device 0, partition "boot"
-    fastboot flash 1:system system.img    # Flash to device 1, partition "system"
-    fastboot flash 0:gpt gpt.img          # Write GPT to device 0
-    fastboot flash 1:mbr mbr.img          # Write MBR to device 1
+    fastboot flash 0:boot boot.img        # Flash to default interface, device 0, partition "boot"
+    fastboot flash 1:system system.img    # Flash to default interface, device 1, partition "system"
+    fastboot flash 0:gpt gpt.img          # Write GPT to default interface, device 0
+    fastboot flash 1:mbr mbr.img          # Write MBR to default interface, device 1
+    fastboot flash mtd:0:boot boot.img    # Flash to interface "mtd", device 0, partition "boot"
+    fastboot flash scsi:4:boot boot.img   # Flash to interface "scsi", device 4, partition "boot"
 
-If no device number is specified, the default device from
-``CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID`` is used::
+If no interface is specified, ``CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME`` is
+used. If no device number is specified, ``CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID``
+is used::
 
-    fastboot flash boot boot.img          # Uses default device
+    fastboot flash boot boot.img          # Uses default interface and device
 
 This syntax is supported for:
 
 * Regular partition flashing
-* GPT partition table updates (``gpt`` or ``N:gpt``)
-* MBR partition table updates (``mbr`` or ``N:mbr``)
+* GPT partition table updates (``gpt``, ``N:gpt``, or ``iface:N:gpt``)
+* MBR partition table updates (``mbr``, ``N:mbr``, or ``iface:N:mbr``)
 * Partition erasing operations
+
+Partition names containing a colon
+"""""""""""""""""""""""""""""""""""
+
+Some partition layouts use literal partition names that themselves contain a
+colon, for example ``0:SBL`` or ``1:SBL``. This is ambiguous with the device
+prefix syntax above: ``flash 0:SBL`` could mean "partition SBL on device 0"
+or "partition literally named 0:SBL on the default device".
+
+U-Boot resolves this as follows:
+
+* If a partition alias is defined (see below), it always wins and no
+  ambiguity check is performed.
+* Otherwise, both interpretations are looked up on the same resolved device.
+  If only one exists, it is used. If both exist and refer to the same
+  partition, it is used. If both exist and refer to *different* partitions,
+  the command fails with ``ambiguous partition name`` instead of silently
+  picking one.
+
+To make such names unambiguous, define a partition alias::
+
+    fastboot_partition_alias_sbl0=0:SBL
+    fastboot_partition_alias_sbl1=1:SBL
+
+and reference the alias instead of the literal name::
+
+    fastboot flash mtd:0:sbl0 boot.img
+
+A partition literally named ``gpt``, ``mbr``, or a device-prefixed form of
+either (e.g. ``0:gpt``) is always treated as the reserved GPT/MBR
+partition-table target and cannot be reached directly; use an alias to flash
+a partition with such a name.
 
 Partition Name Formats
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -257,10 +292,6 @@ It's possible to interrupt the fastboot command using Ctrl-c::
 
    => fastboot usb 0
    Operation aborted.
-
-``CONFIG_CMD_FASTBOOT_ABORT_KEYED`` can be enabled so that *any* keypress
-will interrupt the fastboot command, rather than just Ctrl-c. This can be
-quite useful on mobile devices which lack a means to input Ctrl-c.
 
 You can also specify a kernel image to boot. You have to either specify
 the an image in Android format *or* pass a binary kernel and let the
