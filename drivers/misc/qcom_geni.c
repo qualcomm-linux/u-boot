@@ -13,6 +13,7 @@
 #include <dm/device-internal.h>
 #include <dm/lists.h>
 #include <elf.h>
+#include <fastboot.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
 #include <linux/io.h>
@@ -647,6 +648,11 @@ int qcom_geni_fw_probe(struct udevice *dev)
 #else
 EVENT_SPY_SIMPLE(EVT_LAST_STAGE_INIT, qcom_geni_fw_initialise);
 #endif
+
+int fastboot_oem_spi_nor_reinit(void)
+{
+	return qcom_geni_fw_initialise();
+}
 
 static const struct udevice_id geni_ids[] = {
 	{ .compatible = "qcom,geni-se-qup" },
