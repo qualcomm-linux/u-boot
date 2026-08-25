@@ -140,7 +140,8 @@ struct blk_desc *blk_get_devnum_by_uclass_idname(const char *uclass_idname, int 
 			continue;
 
 		/* Find out the parent device uclass */
-		if (device_get_uclass_id(dev->parent) != uclass_id) {
+		if (device_get_uclass_id(dev->parent) != uclass_id &&
+		    desc->uclass_id != uclass_id) {
 			debug("%s: parent uclass %d, this dev %d\n", __func__,
 			      device_get_uclass_id(dev->parent), uclass_id);
 			continue;
