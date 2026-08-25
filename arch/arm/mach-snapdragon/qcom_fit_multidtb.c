@@ -17,6 +17,7 @@
 #include <lmb.h>
 #include <log.h>
 #include <malloc.h>
+#include <memalign.h>
 #include <part.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
@@ -642,7 +643,7 @@ static int qcom_load_fit_image(const char *filename, const char *partname,
 	if (!ret) {
 		fat_size(filename, &file_size);
 
-		fit_buf = malloc(file_size);
+		fit_buf = malloc_cache_aligned(file_size);
 		if (!fit_buf)
 			return -ENOMEM;
 
