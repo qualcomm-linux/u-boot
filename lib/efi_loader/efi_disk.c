@@ -529,8 +529,12 @@ static efi_status_t efi_disk_add_dev(
 	/*
 	 * On partitions or whole disks without partitions install the
 	 * simple file system protocol if a file system is available.
+	 *
+	 * Skip the filesystem probe for non-ESP GPT partitions: only the ESP
+	 * is ever opened as a filesystem before boot.
 	 */
 	if ((part || desc->part_type == PART_TYPE_UNKNOWN) &&
+	    (!part_info || (part_info->bootable & PART_EFI_SYSTEM_PARTITION)) &&
 	    efi_fs_exists(desc, part)) {
 		ret = efi_create_simple_file_system(desc, part, diskobj->dp,
 						    &diskobj->volume);
