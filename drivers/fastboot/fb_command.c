@@ -45,6 +45,7 @@ static void oem_partconf(char *, char *);
 static void oem_bootbus(char *, char *);
 static void oem_console(char *, char *);
 static void oem_board(char *, char *);
+static void oem_set_block_target(char *, char *);
 static void run_ucmd(char *, char *);
 static void run_acmd(char *, char *);
 
@@ -119,6 +120,11 @@ static const struct {
 	[FASTBOOT_COMMAND_OEM_BOARD] = {
 		.command = "oem board",
 		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_OEM_BOARD, (oem_board), (NULL))
+	},
+	[FASTBOOT_COMMAND_OEM_SET_BLOCK_TARGET] = {
+		.command = "oem set-block-target",
+		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_CMD_OEM_SET_BLOCK_TARGET,
+					      (oem_set_block_target), (NULL))
 	},
 	[FASTBOOT_COMMAND_UCMD] = {
 		.command = "UCmd",
@@ -588,4 +594,49 @@ void __weak fastboot_oem_board(char *cmd_parameter, void *data, u32 size, char *
 static void __maybe_unused oem_board(char *cmd_parameter, char *response)
 {
 	fastboot_oem_board(cmd_parameter, (void *)fastboot_buf_addr, image_size, response);
+}
+
+/**
+ * oem_set_block_target() - Execute the OEM set-block-target command
+ *
+ * @cmd_parameter: Pointer to "<interface> [device]" command parameter
+ * @response: Pointer to fastboot response buffer
+ *
+ * Switches the block interface (e.g. "scsi", "mtd") and, optionally,
+ * device number used by the fastboot block backend at runtime.
+ */
+static void __maybe_unused oem_set_block_target(char *cmd_parameter, char *response)
+{
+	char interface[16] = { 0 };
+	int device = -1;
+	char *space;
+
+	if (!cmd_parameter) {
+		fastboot_fail("Expected command parameter", response);
+		return;
+	}
+
+	space = strchr(cmd_parameter, ' ');
+	if (space) {
+		size_t len = space - cmd_parameter;
+
+		if (len >= sizeof(interface)) {
+			fastboot_fail("interface name too long", response);
+			return;
+		}
+		memcpy(interface, cmd_parameter, len);
+		interface[len] = '\0';
+		device = simple_strtoul(space + 1, NULL, 10);
+	} else {
+		if (strlen(cmd_parameter) >= sizeof(interface)) {
+			fastboot_fail("interface name too long", response);
+			return;
+		}
+		strlcpy(interface, cmd_parameter, sizeof(interface));
+	}
+
+	if (fastboot_block_set_target(interface, device))
+		fastboot_fail("invalid interface name", response);
+	else
+		fastboot_okay(NULL, response);
 }

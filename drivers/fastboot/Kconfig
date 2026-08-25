@@ -225,6 +225,17 @@ config FASTBOOT_FLASH_BLOCK_DEVICE_ID
 	  Device identifiers are numbered starting from 0 and the most
 	  common case is to use the first controller on the system.
 
+config FASTBOOT_CMD_OEM_SET_BLOCK_TARGET
+	bool "Enable the 'oem set-block-target' command"
+	depends on FASTBOOT_FLASH_BLOCK
+	help
+	  Add support for the "oem set-block-target" command from a client.
+	  This allows switching the block interface (e.g. scsi, mtd) and
+	  device number used by the fastboot "flash"/"erase" commands at
+	  runtime, instead of relying solely on the
+	  CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME /
+	  CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID build-time defaults.
+
 config FASTBOOT_GPT_NAME
 	string "Target name for updating GPT"
 	depends on (FASTBOOT_FLASH_MMC || FASTBOOT_FLASH_BLOCK) && EFI_PARTITION

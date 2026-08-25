@@ -126,6 +126,60 @@ static lbaint_t fb_block_sparse_reserve(struct sparse_storage *info,
 }
 
 /**
+ * block_interface_override - runtime-set block interface name, empty if unset
+ */
+static char block_interface_override[16];
+/**
+ * block_device_override - runtime-set block device number, -1 if unset
+ */
+static int block_device_override = -1;
+
+/**
+ * fb_block_interface() - Resolve the block interface name to use
+ *
+ * Returns the runtime override set via fastboot_block_set_target() if one
+ * is active, otherwise falls back to the build-time config default.
+ */
+static const char *fb_block_interface(void)
+{
+	if (block_interface_override[0])
+		return block_interface_override;
+
+	return config_opt_enabled(CONFIG_FASTBOOT_FLASH_BLOCK,
+				  CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME, NULL);
+}
+
+/**
+ * fb_block_device() - Resolve the block device number to use
+ *
+ * Returns the runtime override set via fastboot_block_set_target() if one
+ * is active, otherwise falls back to the build-time config default.
+ */
+static int fb_block_device(void)
+{
+	if (block_device_override >= 0)
+		return block_device_override;
+
+	return config_opt_enabled(CONFIG_FASTBOOT_FLASH_BLOCK,
+				  CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID, -1);
+}
+
+int fastboot_block_set_target(const char *interface, int device)
+{
+	if (interface) {
+		if (strlen(interface) >= sizeof(block_interface_override))
+			return -EINVAL;
+		strlcpy(block_interface_override, interface,
+			sizeof(block_interface_override));
+	}
+
+	if (device >= 0)
+		block_device_override = device;
+
+	return 0;
+}
+
+/**
  * parse_device_partition() - Parse and validate device:partition format
  * @part_name: Input string in format "N:partition" or "partition"
  * @device: Output device number
@@ -140,8 +194,7 @@ static int parse_device_partition(const char *part_name, int *device,
 {
 	const char *colon_pos;
 
-	*device = config_opt_enabled(CONFIG_FASTBOOT_FLASH_BLOCK,
-				     CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID, -1);
+	*device = fb_block_device();
 
 	/* Check for colon in partition name */
 	colon_pos = strchr(part_name, ':');
@@ -190,9 +243,7 @@ int fastboot_block_get_part_info(const char *part_name,
 				 char *response)
 {
 	int ret;
-	const char *interface = config_opt_enabled(CONFIG_FASTBOOT_FLASH_BLOCK,
-						   CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME,
-						   NULL);
+	const char *interface = fb_block_interface();
 	int device;
 	const char *partition_name;
 
@@ -385,9 +436,7 @@ void fastboot_block_flash_write(const char *part_name, void *download_buffer,
 #if CONFIG_IS_ENABLED(EFI_PARTITION)
 	if (is_partition_table_name(part_name, CONFIG_FASTBOOT_GPT_NAME)) {
 		int device;
-		const char *interface = config_opt_enabled(CONFIG_FASTBOOT_FLASH_BLOCK,
-							   CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME,
-							   NULL);
+		const char *interface = fb_block_interface();
 
 		parse_device_partition(part_name, &device, NULL);
 		fastboot_flash_gpt_partition_table(interface, device,
@@ -399,9 +448,7 @@ void fastboot_block_flash_write(const char *part_name, void *download_buffer,
 #if CONFIG_IS_ENABLED(DOS_PARTITION)
 	if (is_partition_table_name(part_name, CONFIG_FASTBOOT_MBR_NAME)) {
 		int device;
-		const char *interface = config_opt_enabled(CONFIG_FASTBOOT_FLASH_BLOCK,
-							   CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME,
-							   NULL);
+		const char *interface = fb_block_interface();
 
 		parse_device_partition(part_name, &device, NULL);
 		fastboot_flash_mbr_partition_table(interface, device,
