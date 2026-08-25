@@ -9,9 +9,11 @@
 
 #include <dm.h>
 #include <errno.h>
+#include <linux/mtd/mtd.h>
 #include <linux/mtd/spi-nor.h>
 #include <log.h>
 #include <malloc.h>
+#include <part.h>
 #include <spi.h>
 #include <spi_flash.h>
 #include <spi-mem.h>
@@ -112,6 +114,37 @@ static int spi_flash_probe_slave(struct spi_flash *flash)
 
 	if (CONFIG_IS_ENABLED(SPI_FLASH_MTD))
 		ret = spi_flash_mtd_register(flash);
+
+	if (CONFIG_IS_ENABLED(DM_SPI_FLASH) && CONFIG_IS_ENABLED(MTD_BLOCK) &&
+	    flash->dev) {
+		struct spi_flash_blk_plat *plat = dev_get_plat(flash->dev);
+		struct udevice *bdev;
+
+		plat->mtd = &flash->mtd;
+		ret = mtd_bind(flash->dev, &plat->mtd);
+
+		/*
+		 * mtd_bind() always creates the block device with a fixed
+		 * 512-byte sector and the native MTD partition scheme
+		 * (mtdparts=), which matches eMMC/NAND but not SPI-NOR:
+		 * GPT/partition images for NOR are built using the erase-
+		 * block size as the logical sector, since sub-erase-block
+		 * writes require a read-modify-erase-write cycle anyway, and
+		 * NOR is commonly GPT-partitioned rather than mtdparts=.
+		 * Overwrite both after the fact instead of teaching mtd_bind()
+		 * about NOR specifics.
+		 */
+		if (!ret && !blk_find_from_parent(flash->dev, &bdev)) {
+			struct blk_desc *bdesc = dev_get_uclass_plat(bdev);
+
+			bdesc->blksz = dev_read_u32_default(flash->dev,
+							    "nor-blk-size",
+							    flash->mtd.erasesize);
+			bdesc->log2blksz = LOG2(bdesc->blksz);
+			bdesc->lba = lldiv(flash->mtd.size, bdesc->blksz);
+			bdesc->part_type = PART_TYPE_UNKNOWN;
+		}
+	}
 
 err_read_id:
 	spi_release_bus(spi);
@@ -260,6 +293,7 @@ U_BOOT_DRIVER(jedec_spi_nor) = {
 	.probe		= spi_flash_std_probe,
 	.remove		= spi_flash_std_remove,
 	.priv_auto	= sizeof(struct spi_nor),
+	.plat_auto	= sizeof(struct spi_flash_blk_plat),
 	.ops		= &spi_flash_std_ops,
 	.flags		= DM_FLAG_OS_PREPARE,
 };
