@@ -15,3 +15,4 @@ Qualcomm
    phones
    rdp
    snagboot
+   spl-qclib
