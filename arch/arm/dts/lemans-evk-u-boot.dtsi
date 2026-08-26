@@ -49,7 +49,7 @@
 };
 
 &gcc {
-	bootph-all; /* Enable GCC for SPL */
+	bootph-all;
 };
 
 /* RPMH clock controller - required by GCC */
@@ -69,6 +69,13 @@
 
 &tlmm {
 	bootph-all;   /* Make TLMM GPIO controller available in SPL */
+
+	qup_spi21_default: qup-spi21-state {
+		pins = "gpio13", "gpio14", "gpio15", "gpio16";
+		function = "sail_top";
+		drive-strength = <2>;
+		bias-disable;
+	};
 };
 
 /* Enter Qualcomm EDL/download mode via "reset -edl". */
@@ -78,3 +85,23 @@
 	};
 };
 
+&{/aliases} {
+	spi0 = &spi21;
+};
+
+&qupv3_id_3 {
+	bootph-all;
+};
+
+&spi21 {
+	assigned-clocks = <&gcc GCC_QUPV3_WRAP3_S0_CLK>;
+	assigned-clock-rates = <48000000>;
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <48000000>;
+		spi-tx-bus-width = <1>;
+		spi-rx-bus-width = <1>;
+	};
+};
