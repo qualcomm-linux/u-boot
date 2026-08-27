@@ -116,10 +116,10 @@ struct qcom_image_map {
 	EFI_GUID(0x17911177, 0xc9e6, 0x4372, 0x93, 0x3c, 0x80, 0x4b, 0x67, 0x8e, 0x66, 0x6f)
 #define QCOM_MULTIIMGOEM_IMAGE_TYPE_GUID \
 	EFI_GUID(0xe126a436, 0x757e, 0x42d0, 0x8d, 0x19, 0x0f, 0x36, 0x2f, 0x7a, 0x62, 0xb8)
-#define QCOM_APDP_IMAGE_TYPE_GUID \
-	EFI_GUID(0xe6e98da2, 0xe22a, 0x4d12, 0xab, 0x33, 0x16, 0x9e, 0x7d, 0xea, 0xa5, 0x07)
 #define QCOM_RPM_IMAGE_TYPE_GUID \
 	EFI_GUID(0x098df793, 0xd712, 0x413d, 0x9d, 0x4e, 0x89, 0xd7, 0x11, 0x77, 0x22, 0x28)
+#define QCOM_MULTIIMGQTI_IMAGE_TYPE_GUID \
+	EFI_GUID(0x846c6f05, 0xeb46, 0x4c0a, 0xa1, 0xa3, 0x36, 0x48, 0xef, 0x3f, 0x9d, 0x0e)
 
 static const struct qcom_image_map qcom_image_map[] = {
 	/*
@@ -170,10 +170,10 @@ static const struct qcom_image_map qcom_image_map[] = {
 	  QCOM_IMAGEFV_IMAGE_TYPE_GUID },
 	{ "multiimgoem", u"QCOM-MULTIIMGOEM", 14, 0, NULL, false,
 	  QCOM_MULTIIMGOEM_IMAGE_TYPE_GUID },
-	{ "apdp",        u"QCOM-APDP",        15, 0, NULL, false,
-	  QCOM_APDP_IMAGE_TYPE_GUID },
 	{ "rpm",         u"QCOM-RPM",         16, 0, NULL, false,
 	  QCOM_RPM_IMAGE_TYPE_GUID },
+	{ "multiimgqti", u"QCOM-MULTIIMGQTI", 17, 0, NULL, false,
+	  QCOM_MULTIIMGQTI_IMAGE_TYPE_GUID },
 };
 
 /*
