@@ -98,6 +98,7 @@ struct msm_serial_data {
 	u32 baud;
 	u32 oversampling;
 	struct clk *se;
+	bool cable_connected;
 };
 
 unsigned long root_freq[] = {7372800,  14745600, 19200000, 29491200,
@@ -299,6 +300,28 @@ static u32 qcom_geni_serial_tx_empty(u64 base)
 }
 
 /**
+ * qcom_geni_serial_is_cable_connected() - Check UART RX-line BREAK condition.
+ * @base:	Pointer to the concerned serial engine.
+ *
+ * A serial cable that is not connected leaves the RX line in a state that
+ * the UART hardware reports as a BREAK condition that never ends, i.e.
+ * S_GP_IRQ_2 (RX_BREAK_START) gets set without a following S_GP_IRQ_3
+ * (RX_BREAK_END). This function checks the secondary sequencer IRQ status
+ * for that pattern.
+ *
+ * Return: false, if no cable is connected, true otherwise.
+ */
+static bool qcom_geni_serial_is_cable_connected(u64 base)
+{
+	u32 s_irq_status = readl(base + SE_GENI_S_IRQ_STATUS);
+
+	if ((s_irq_status & S_GP_IRQ_2_EN) && !(s_irq_status & S_GP_IRQ_3_EN))
+		return false;
+
+	return true;
+}
+
+/**
  * geni_se_setup_s_cmd() - Setup the secondary sequencer
  * @se:		Pointer to the concerned serial engine.
  * @cmd:	Command/Operation to setup in the secondary sequencer.
@@ -383,6 +406,10 @@ static void msm_geni_serial_setup_rx(struct udevice *dev)
 static int msm_serial_putc(struct udevice *dev, const char ch)
 {
 	struct msm_serial_data *priv = dev_get_priv(dev);
+
+	if (CONFIG_IS_ENABLED(MSM_GENI_SERIAL_CABLE_DETECT) &&
+	    !priv->cable_connected)
+		return 0;
 
 	writel(DEF_TX_WM, priv->base + SE_GENI_TX_WATERMARK_REG);
 	qcom_geni_serial_setup_tx(priv->base, 1);
@@ -566,6 +593,11 @@ static int msm_serial_probe(struct udevice *dev)
 	qcom_geni_serial_start_rx(dev);
 	qcom_geni_serial_start_tx(priv->base);
 
+	if (CONFIG_IS_ENABLED(MSM_GENI_SERIAL_CABLE_DETECT))
+		priv->cable_connected = qcom_geni_serial_is_cable_connected(priv->base);
+	else
+		priv->cable_connected = true;
+
 	return 0;
 }
 
@@ -616,6 +648,8 @@ static struct udevice init_dev = {
 #error Clocks cannot be set at early debug. Change CONFIG_BAUDRATE
 #endif
 
+static bool debug_uart_cable_connected = true;
+
 static inline void _debug_uart_init(void)
 {
 	phys_addr_t base = CONFIG_VAL(DEBUG_UART_BASE);
@@ -624,11 +658,18 @@ static inline void _debug_uart_init(void)
 	writel(DEF_RX_WM, base + SE_GENI_RX_WATERMARK_REG);
 	geni_serial_baud(base, CLK_DIV, CONFIG_BAUDRATE);
 	qcom_geni_serial_start_tx(base);
+
+	if (CONFIG_IS_ENABLED(MSM_GENI_SERIAL_CABLE_DETECT))
+		debug_uart_cable_connected = qcom_geni_serial_is_cable_connected(base);
 }
 
 static inline void _debug_uart_putc(int ch)
 {
 	phys_addr_t base = CONFIG_VAL(DEBUG_UART_BASE);
+
+	if (CONFIG_IS_ENABLED(MSM_GENI_SERIAL_CABLE_DETECT) &&
+	    !debug_uart_cable_connected)
+		return;
 
 	writel(DEF_TX_WM, base + SE_GENI_TX_WATERMARK_REG);
 	qcom_geni_serial_setup_tx(base, 1);
