@@ -1040,6 +1040,15 @@ config SPL_MSM_GENI_SERIAL
 	  Driver works in FIFO mode.
 	  Multiple baudrates supported.
 
+config MSM_GENI_SERIAL_CABLE_DETECT
+	bool "Disable GENI UART TX when no cable/console is connected"
+	depends on MSM_GENI_SERIAL
+	default n
+	help
+	  Detect a UART RX-line BREAK condition, which indicates that no
+	  cable is connected to the debug UART port, and suppress UART TX
+	  output in that case to avoid driving an unterminated line.
+
 config MXS_AUART_SERIAL
 	bool "MXS AUART"
 	depends on DM_SERIAL
