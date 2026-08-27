@@ -26,11 +26,16 @@
  * firmware components varies per board, and U-Boot itself may live on one of
  * several partitions depending on how it was booted.
  *
- * qcom_image_map[] maps each partition base name to a fixed capsule image_index
- * and a slot-independent firmware name. U-Boot's own image is image_index 1 in
- * the same table, split into boot-source-gated rows so the right partition is
- * picked for the running boot source: uefi/xbl (or the legacy "aboot" alias)
- * when flashed as XBL, boot when chainloaded from ABL.
+ * qcom_image_map[] maps each partition base name to a fixed image_index and a
+ * slot-independent firmware name. That index is used only to dedup map rows
+ * (one partition per index) and as the capsule authoring index; it is not the
+ * index reported at runtime. qcom_build_fw_images() assigns
+ * fw_images[].image_index sequentially (1..num_images) so GetImageInfo reports
+ * a valid descriptor array, and payloads are matched by image_type_id (GUID),
+ * not by index. U-Boot's own image is index 1 in the table, split into
+ * boot-source-gated rows so the right partition is picked for the running boot
+ * source: uefi/xbl (or the legacy "aboot" alias) when flashed as XBL, boot when
+ * chainloaded from ABL.
  */
 
 /**
@@ -38,10 +43,12 @@
  * @partition_base: base partition name, without the _a/_b slot suffix
  * @fw_name_base: slot-independent firmware name; the FMP GUID is derived
  *                from this, so it must stay constant across A/B toggles
- * @image_index: fixed image index for this component, frozen forever once
- *               a capsule ships referencing it. image_index 1 is reserved for
- *               U-Boot's own image (the three boot-source-gated rows below);
- *               exactly one of those is ever selected per boot.
+ * @image_index: fixed index for this component, used to dedup map rows in
+ *               qcom_resolve_images() and as the capsule authoring index. Not
+ *               the runtime fw_images[].image_index, which is assigned
+ *               sequentially. Index 1 is reserved for U-Boot's own image (the
+ *               three boot-source-gated rows below); exactly one of those is
+ *               ever selected per boot.
  * @boot_source: if non-zero, this row is only eligible when qcom_boot_source
  *               matches. Gates U-Boot's own image: uefi/xbl need
  *               QCOM_BOOT_SOURCE_XBL, boot needs QCOM_BOOT_SOURCE_ANDROID.
@@ -235,7 +242,9 @@ static bool is_sd(struct blk_desc *desc)
  *             split xbl/xbl_config onto one LUN, tz/hyp/aop onto another) group
  *             back into the correct per-device DFU string tokens
  * @fw_name: slot-independent FMP name (from the matched map row's fw_name_base)
- * @image_index: fw_images[] image_index (from the matched map row)
+ * @image_index: fixed index from the matched map row, used to dedup rows in
+ *               qcom_resolve_images(). Not the runtime fw_images[].image_index,
+ *               which is assigned sequentially.
  * @image_type_id: fixed FMP GUID (from the matched map row's image_type_id)
  */
 struct qcom_partition_info {
@@ -493,10 +502,16 @@ static u32 qcom_resolve_images(struct qcom_row_cand *cands,
  * @num_partitions: number of valid entries in @partitions
  *
  * One fw_images[] entry per partition, in the same order, so fw_images[] and
- * @partitions stay index-aligned. .image_type_id is set from the matched map
- * row's fixed A-slot GUID. Since fw_images[0] is then non-zero,
+ * @partitions stay index-aligned. .image_index is assigned sequentially
+ * (1..num_partitions) so GetImageInfo reports a valid descriptor array (UEFI
+ * 2.9A: 1 <= ImageIndex <= DescriptorCount); the fixed per-component index from
+ * qcom_image_map[] is kept only for dedup in qcom_resolve_images(), which keys
+ * off qcom_partition_info.image_index rather than this array. Payloads are
+ * matched to this array by image_type_id (GUID), so the sequential value need
+ * not match the capsule's UpdateImageIndex. .image_type_id is set from the
+ * matched map row's fixed A-slot GUID. fw_images[0] is then non-zero, so
  * efi_gen_capsule_guids() skips derivation for the whole table (it derives only
- * when entry 0 is still zero), so the hardcoded GUIDs stand.
+ * when entry 0 is still zero) and the hardcoded GUIDs stand.
  *
  * Return: number of images written (equal to @num_partitions)
  */
@@ -507,7 +522,7 @@ static u32 qcom_build_fw_images(const struct qcom_partition_info *partitions,
 
 	for (i = 0; i < num_partitions; i++) {
 		fw_images[i].fw_name = (u16 *)partitions[i].fw_name;
-		fw_images[i].image_index = partitions[i].image_index;
+		fw_images[i].image_index = i + 1;
 		guidcpy(&fw_images[i].image_type_id, &partitions[i].image_type_id);
 	}
 
@@ -532,10 +547,12 @@ static u32 qcom_build_fw_images(const struct qcom_partition_info *partitions,
  * drop every partition on a LUN other than the first.
  *
  * dfu_alt_add() assigns each token's dfu_alt_num by its position in the parsed
- * string, so fw_images[i].dfu_alt_num is recorded here as tokens are appended,
- * not derived from image_index (which isn't contiguous or string-ordered once
- * components are missing). Relies on qcom_build_fw_images() having already
- * filled fw_images[0..num_partitions) from this same @partitions array.
+ * string, so fw_images[i].dfu_alt_num is recorded here as tokens are appended.
+ * Since qcom_build_fw_images() now assigns image_index as i + 1, dfu_alt_num
+ * equals image_index - 1; recording it positionally keeps dfu_alt_num correct
+ * regardless of how image_index is chosen. Relies on qcom_build_fw_images()
+ * having already filled fw_images[0..num_partitions) from this same
+ * @partitions array.
  *
  * Return: true on success, false if @buf was too small
  */
@@ -689,11 +706,11 @@ void qcom_configure_capsule_updates(void)
  * @image_index: fw_images[].image_index to resolve
  *
  * Strong override of the __weak default in lib/efi_loader/efi_firmware.c.
- * Qualcomm's fw_images[] is built at runtime and its image_index values aren't
- * guaranteed contiguous (a board may lack some components), so dfu_alt_num
- * can't be derived positionally -- look up the value recorded by
- * qcom_build_dfu_string() for the matching image_index instead, mirroring the
- * scan efi_firmware_get_image_type_id() already does.
+ * With image_index assigned sequentially, the weak default's image_index - 1
+ * already matches the positional dfu_alt_num. This override keeps the lookup
+ * explicit so it stays correct if fw_images[] ever becomes non-positional:
+ * return the dfu_alt_num recorded by qcom_build_dfu_string() for the matching
+ * image_index, mirroring efi_firmware_get_image_type_id().
  *
  * Falls back to the weak default's image_index - 1 if not found, which
  * shouldn't happen since every image_index passed in comes from fw_images[].
@@ -711,4 +728,33 @@ u8 efi_firmware_get_dfu_alt_num(u8 image_index)
 	}
 
 	return image_index - 1;
+}
+
+/**
+ * efi_capsule_resolve_image_index() - resolve a capsule to its image_index
+ * @image_type: image type GUID from the capsule (UpdateImageTypeId)
+ * @capsule_index: image index from the capsule (UpdateImageIndex)
+ *
+ * Strong override of the __weak default in lib/efi_loader/efi_capsule.c.
+ * fw_images[].image_index is assigned sequentially in qcom_build_fw_images(),
+ * so it depends on which components a given board carries and cannot match the
+ * capsule's frozen UpdateImageIndex. Match the payload by image_type_id (GUID)
+ * instead and return that image's own image_index for efi_fmp_find() and
+ * set_image().
+ *
+ * Falls back to @capsule_index for an absent component, letting efi_fmp_find()
+ * fail cleanly.
+ *
+ * Return: the image_index to use for efi_fmp_find() and set_image()
+ */
+u8 efi_capsule_resolve_image_index(const efi_guid_t *image_type,
+				   u8 capsule_index)
+{
+	int i;
+
+	for (i = 0; i < update_info.num_images; i++)
+		if (!guidcmp(&update_info.images[i].image_type_id, image_type))
+			return update_info.images[i].image_index;
+
+	return capsule_index;
 }
