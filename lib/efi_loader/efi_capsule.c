@@ -517,6 +517,13 @@ static __maybe_unused efi_status_t fwu_post_update_process(bool fw_accept_os)
 	return ret;
 }
 
+/* Weak default; see the prototype in include/efi_loader.h. */
+u8 __weak efi_capsule_resolve_image_index(const efi_guid_t *image_type,
+					  u8 capsule_index)
+{
+	return capsule_index;
+}
+
 /**
  * efi_capsule_update_firmware - update firmware from capsule
  * @capsule_data:	Capsule
@@ -543,6 +550,7 @@ static efi_status_t efi_capsule_update_firmware(
 	int status;
 	uint update_index;
 	bool fw_accept_os;
+	u8 fmp_index;
 
 	if (IS_ENABLED(CONFIG_FWU_MULTI_BANK_UPDATE)) {
 		if (fwu_empty_capsule(capsule_data)) {
@@ -615,9 +623,14 @@ static efi_status_t efi_capsule_update_firmware(
 			goto out;
 		}
 
+		/* resolve the capsule to its platform image index */
+		fmp_index = efi_capsule_resolve_image_index(
+				&image->update_image_type_id,
+				image->update_image_index);
+
 		/* find a device for update firmware */
 		fmp = efi_fmp_find(&image->update_image_type_id,
-				   image->update_image_index,
+				   fmp_index,
 				   image->update_hardware_instance,
 				   handles, no_handles);
 		if (!fmp) {
@@ -650,7 +663,7 @@ static efi_status_t efi_capsule_update_firmware(
 		}
 
 		abort_reason = NULL;
-		ret = EFI_CALL(fmp->set_image(fmp, image->update_image_index,
+		ret = EFI_CALL(fmp->set_image(fmp, fmp_index,
 					      image_binary,
 					      image_binary_size,
 					      vendor_code, NULL,
