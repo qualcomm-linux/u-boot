@@ -615,6 +615,19 @@ on the FWU Multi Bank Update feature, please refer to
 When using the FMP for FIT images, the image index value needs to be
 set to 1.
 
+Platforms with a dynamically discovered image set
+'''''''''''''''''''''''''''''''''''''''''''''''''''
+
+Some platforms (for example Qualcomm boards) build the fw_images array at
+runtime from the partition table, so the set of updatable images is not known
+until boot. image_index is assigned sequentially (1..num_images) at init, so
+GetImageInfo and the ESRT keep 1 <= ImageIndex <= DescriptorCount, but the
+capsule's UpdateImageIndex can then no longer be trusted to select the right
+image. Such a platform overrides efi_capsule_resolve_image_index() to map the
+incoming payload to its own image_index by image_type_id (GUID). The weak
+default returns UpdateImageIndex unchanged, so platforms with a static 1:1
+fw_images[] are unaffected.
+
 Finally, the capsule update can be initiated by rebooting the board.
 
 An example of setting the values in the struct efi_fw_image and

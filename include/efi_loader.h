@@ -1257,6 +1257,21 @@ efi_status_t efi_load_capsule_drivers(void);
  */
 u8 efi_firmware_get_dfu_alt_num(u8 image_index);
 
+/**
+ * efi_capsule_resolve_image_index() - map a capsule to its platform image index
+ * @image_type:		image type GUID from the capsule (UpdateImageTypeId)
+ * @capsule_index:	image index from the capsule (UpdateImageIndex)
+ *
+ * Return the image_index to use for efi_fmp_find() and set_image(). The weak
+ * default returns @capsule_index unchanged; a platform whose fw_images[] is
+ * built dynamically overrides this to resolve @image_type to its own
+ * image_index.
+ *
+ * Return:		image_index to use for efi_fmp_find() and set_image()
+ */
+u8 efi_capsule_resolve_image_index(const efi_guid_t *image_type,
+				   u8 capsule_index);
+
 efi_status_t platform_get_eventlog(struct udevice *dev, u64 *addr, u32 *sz);
 
 efi_status_t efi_locate_handle_buffer_int(enum efi_locate_search_type search_type,
