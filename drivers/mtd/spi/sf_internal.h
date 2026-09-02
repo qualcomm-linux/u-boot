@@ -16,6 +16,8 @@
 #define SPI_NOR_MAX_ID_LEN	6
 #define SPI_NOR_MAX_ADDR_WIDTH	4
 
+struct mtd_info;
+
 struct flash_info {
 #if !CONFIG_IS_ENABLED(SPI_FLASH_TINY)
 	char		*name;
@@ -75,6 +77,11 @@ extern const struct flash_info spi_nor_ids[];
 
 #define JEDEC_MFR(info)	((info)->id[0])
 #define JEDEC_ID(info)		(((info)->id[1]) << 8 | ((info)->id[2]))
+
+/* Plat data for jedec_spi_nor, holding the mtd_info pointer mtd_bind() needs */
+struct spi_flash_blk_plat {
+	struct mtd_info *mtd;
+};
 
 /* Get software write-protect value (BP bits) */
 int spi_flash_cmd_get_sw_write_prot(struct spi_flash *flash);

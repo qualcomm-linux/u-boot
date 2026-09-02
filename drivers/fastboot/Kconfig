@@ -225,6 +225,28 @@ config FASTBOOT_FLASH_BLOCK_DEVICE_ID
 	  Device identifiers are numbered starting from 0 and the most
 	  common case is to use the first controller on the system.
 
+config FASTBOOT_CMD_OEM_SET_BLOCK_TARGET
+	bool "Enable the 'oem set-block-target' command"
+	depends on FASTBOOT_FLASH_BLOCK
+	help
+	  Add support for the "oem set-block-target" command from a client.
+	  This allows switching the block interface (e.g. scsi, mtd) and
+	  device number used by the fastboot "flash"/"erase" commands at
+	  runtime, instead of relying solely on the
+	  CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME /
+	  CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID build-time defaults.
+
+config FASTBOOT_CMD_OEM_SPI_NOR_INIT
+	bool "Enable the 'oem spi-nor-init' command"
+	depends on DM_SPI_FLASH
+	help
+	  Add support for the "oem spi-nor-init" command from a client. This
+	  removes and reprobes the default SPI-NOR device, letting its
+	  driver's probe() handle any vendor-specific bring-up (e.g. firmware
+	  load) it needs. Use together with "oem set-block-target" to bring up
+	  SPI-NOR via fastboot on boards where SPI-NOR is not usable until
+	  after fastboot has flashed something it depends on.
+
 config FASTBOOT_GPT_NAME
 	string "Target name for updating GPT"
 	depends on (FASTBOOT_FLASH_MMC || FASTBOOT_FLASH_BLOCK) && EFI_PARTITION

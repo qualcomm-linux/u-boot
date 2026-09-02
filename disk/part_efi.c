@@ -976,6 +976,7 @@ int write_mbr_and_gpt_partitions(struct blk_desc *desc, void *buf)
 	}
 
 	/* Update the partition table entries*/
+	desc->part_type = PART_TYPE_UNKNOWN;
 	part_init(desc);
 
 	return 0;

@@ -5,6 +5,7 @@
 
 #include <command.h>
 #include <console.h>
+#include <dm.h>
 #include <env.h>
 #include <fastboot.h>
 #include <fastboot-internal.h>
@@ -13,8 +14,10 @@
 #include <fb_nand.h>
 #include <fb_spi_flash.h>
 #include <part.h>
+#include <spi.h>
 #include <stdlib.h>
 #include <vsprintf.h>
+#include <dm/device-internal.h>
 #include <linux/printk.h>
 
 /**
@@ -45,6 +48,8 @@ static void oem_partconf(char *, char *);
 static void oem_bootbus(char *, char *);
 static void oem_console(char *, char *);
 static void oem_board(char *, char *);
+static void oem_set_block_target(char *, char *);
+static void oem_spi_nor_init(char *, char *);
 static void run_ucmd(char *, char *);
 static void run_acmd(char *, char *);
 
@@ -119,6 +124,16 @@ static const struct {
 	[FASTBOOT_COMMAND_OEM_BOARD] = {
 		.command = "oem board",
 		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_OEM_BOARD, (oem_board), (NULL))
+	},
+	[FASTBOOT_COMMAND_OEM_SET_BLOCK_TARGET] = {
+		.command = "oem set-block-target",
+		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_CMD_OEM_SET_BLOCK_TARGET,
+					      (oem_set_block_target), (NULL))
+	},
+	[FASTBOOT_COMMAND_OEM_SPI_NOR_INIT] = {
+		.command = "oem spi-nor-init",
+		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_CMD_OEM_SPI_NOR_INIT,
+					      (oem_spi_nor_init), (NULL))
 	},
 	[FASTBOOT_COMMAND_UCMD] = {
 		.command = "UCmd",
@@ -588,4 +603,97 @@ void __weak fastboot_oem_board(char *cmd_parameter, void *data, u32 size, char *
 static void __maybe_unused oem_board(char *cmd_parameter, char *response)
 {
 	fastboot_oem_board(cmd_parameter, (void *)fastboot_buf_addr, image_size, response);
+}
+
+/**
+ * oem_set_block_target() - Execute the OEM set-block-target command
+ *
+ * @cmd_parameter: Pointer to "<interface> [device]" command parameter
+ * @response: Pointer to fastboot response buffer
+ *
+ * Switches the block interface (e.g. "scsi", "mtd") and, optionally,
+ * device number used by the fastboot block backend at runtime.
+ */
+static void __maybe_unused oem_set_block_target(char *cmd_parameter, char *response)
+{
+	char interface[16] = { 0 };
+	int device = -1;
+	char *space;
+
+	if (!cmd_parameter) {
+		fastboot_fail("Expected command parameter", response);
+		return;
+	}
+
+	space = strchr(cmd_parameter, ' ');
+	if (space) {
+		size_t len = space - cmd_parameter;
+
+		if (len >= sizeof(interface)) {
+			fastboot_fail("interface name too long", response);
+			return;
+		}
+		memcpy(interface, cmd_parameter, len);
+		interface[len] = '\0';
+		device = simple_strtoul(space + 1, NULL, 10);
+	} else {
+		if (strlen(cmd_parameter) >= sizeof(interface)) {
+			fastboot_fail("interface name too long", response);
+			return;
+		}
+		strlcpy(interface, cmd_parameter, sizeof(interface));
+	}
+
+	if (fastboot_block_set_target(interface, device))
+		fastboot_fail("invalid interface name", response);
+	else
+		fastboot_okay(NULL, response);
+}
+
+/**
+ * fastboot_oem_spi_nor_reinit() - Vendor hook for SPI-NOR re-bring-up.
+ *
+ * This is a default weak implementation, which may be overridden in
+ * SoC-specific code. It runs after the default SPI-NOR device has been
+ * removed and before it is reprobed, and can be used to redo any one-time,
+ * driver-external bring-up (e.g. reloading firmware from storage) that the
+ * device's own probe() cannot repeat on its own.
+ *
+ * Return: 0 on success, or a negative error code.
+ */
+int __weak fastboot_oem_spi_nor_reinit(void)
+{
+	return 0;
+}
+
+/**
+ * oem_spi_nor_init() - Execute the OEM spi-nor-init command
+ *
+ * @cmd_parameter: Pointer to command parameter
+ * @response: Pointer to fastboot response buffer
+ *
+ * Removes the default SPI-NOR device and reprobes it, so the driver's
+ * probe() can perform any bring-up it needs. Useful when SPI-NOR is not
+ * usable until after fastboot has flashed something it depends on.
+ */
+static void __maybe_unused oem_spi_nor_init(char *cmd_parameter, char *response)
+{
+	const int bus = config_opt_enabled(CONFIG_DM_SPI_FLASH, CONFIG_SF_DEFAULT_BUS, 0);
+	const int cs = config_opt_enabled(CONFIG_DM_SPI_FLASH, CONFIG_SF_DEFAULT_CS, 0);
+	struct udevice *bus_dev, *new;
+	int ret;
+
+	ret = fastboot_oem_spi_nor_reinit();
+	if (ret) {
+		fastboot_fail("SPI-NOR vendor reinit failed", response);
+		return;
+	}
+
+	ret = spi_get_bus_and_cs(bus, cs, &bus_dev, (struct spi_slave **)&new);
+	if (ret) {
+		fastboot_fail("failed to probe SPI-NOR", response);
+		return;
+	}
+
+	fastboot_okay(NULL, response);
 }

@@ -51,6 +51,8 @@ enum {
 	FASTBOOT_COMMAND_OEM_RUN,
 	FASTBOOT_COMMAND_OEM_CONSOLE,
 	FASTBOOT_COMMAND_OEM_BOARD,
+	FASTBOOT_COMMAND_OEM_SET_BLOCK_TARGET,
+	FASTBOOT_COMMAND_OEM_SPI_NOR_INIT,
 	FASTBOOT_COMMAND_ACMD,
 	FASTBOOT_COMMAND_UCMD,
 	FASTBOOT_COMMAND_COUNT
@@ -104,6 +106,19 @@ void fastboot_okay(const char *reason, char *response);
  * requires in order to re-enter the bootloader.
  */
 int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason);
+
+/**
+ * fastboot_oem_spi_nor_reinit() - Vendor hook for SPI-NOR re-bring-up
+ *
+ * Called by the "oem spi-nor-init" command after removing the default
+ * SPI-NOR device and before reprobing it. The default implementation is a
+ * no-op; SoC-specific code may override it to redo any one-time bring-up
+ * (e.g. reloading firmware from storage) that the device's own probe()
+ * cannot repeat on its own.
+ *
+ * Return: 0 on success, or a negative error code.
+ */
+int fastboot_oem_spi_nor_reinit(void);
 
 /**
  * fastboot_set_progress_callback() - set progress callback
