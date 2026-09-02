@@ -5,6 +5,9 @@
 
 #include "qcom_defconfig"
 
+# Address where U-Boot proper will be loaded
+CONFIG_TEXT_BASE=0xaf000000
+CONFIG_REMAKE_ELF=y
 CONFIG_FASTBOOT_BUF_ADDR=0xdb300000
 CONFIG_DEFAULT_DEVICE_TREE="qcom/lemans-evk"
 CONFIG_ENV_IS_IN_SCSI=y
