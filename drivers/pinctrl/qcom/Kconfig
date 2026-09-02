@@ -76,14 +76,6 @@ config SPL_PINCTRL_QCOM_IPQ4019
 	  SPL variant of PINCTRL_QCOM_IPQ4019.
 	  See the help of PINCTRL_QCOM_IPQ4019 for details.
 
-config PINCTRL_QCOM_IPQ5210
-	bool "Qualcomm IPQ5210 Pinctrl"
-	default y if PINCTRL_QCOM_GENERIC
-	select PINCTRL_QCOM
-	help
-	  Say Y here to enable support for pinctrl on the IPQ5210 SoC,
-	  as well as the associated GPIO driver.
-
 config PINCTRL_QCOM_IPQ5424
 	bool "Qualcomm IPQ5424 Pinctrl"
 	default y if PINCTRL_QCOM_GENERIC
