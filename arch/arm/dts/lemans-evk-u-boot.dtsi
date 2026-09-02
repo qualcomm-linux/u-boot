@@ -1,33 +1,20 @@
 // SPDX-License-Identifier: BSD-3-Clause
 /*
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2026, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 / {
 	/* Will be removed when bootloader updates later */
 	memory@80000000 {
 		device_type = "memory";
-		bootph-all;  /* Include memory node in SPL DTB */
 		reg = <0x0 0x80000000 0x0 0x3ee00000>,
-		      <0x0 0xc0000000 0x0 0x04d00000>,
-		      <0xd 0x00000000 0x2 0x54100000>,
-		      <0xa 0x80000000 0x1 0x52d00000>,
+		      <0x0 0xc0000000 0x0 0x0fd00000>,
+		      <0xD 0x00000000 0x2 0x54100000>,
+		      <0xA 0x80000000 0x1 0x80000000>,
 		      <0x9 0x00000000 0x1 0x80000000>,
-		      <0x1 0x00000000 0x2 0xf7500000>,
-		      <0x0 0xd0000000 0x0 0x00100000>,
-		      <0x0 0xd3500000 0x0 0x07c00000>,
-		      <0x0 0xdb300000 0x0 0x24d00000>;
-	};
-
-	clocks {
-		/* Fixed clocks needed by GCC */
-		xo_board_clk {
-			bootph-all;
-		};
-
-		sleep_clk {
-			bootph-all;
-		};
+		      <0x1 0x00000000 0x3 0x00000000>,
+		      <0x0 0xd0000000 0x0 0x01900000>,
+		      <0x0 0xd3500000 0x0 0x2cb00000>;
 	};
 
 	/* IMEM boot cookie + TCSR HW version offsets */
@@ -42,40 +29,10 @@
 	};
 };
 
-&ufs_mem_hc {
-	bootph-all; /* Enable UFS for SPL */
-};
-
-&ufs_mem_phy {
-	bootph-all;
-};
-
-&gcc {
-	bootph-all; /* Enable GCC for SPL */
-};
-
-/* RPMH clock controller - required by GCC */
-&rpmhcc {
-	bootph-all;
-};
-
-/* Apps RSC - parent of rpmhcc and rpmhpd */
-&apps_rsc {
-	bootph-all;
-};
-
-/* UART10 - console serial port */
-&uart10 {
-	bootph-all;
-};
-
-&tlmm {
-	bootph-all;   /* Make TLMM GPIO controller available in SPL */
-};
-
 /* Enter Qualcomm EDL/download mode via "reset -edl". */
 &{/psci} {
 	reboot-mode {
 		mode-edl = <0x80000000 0x00000001>;
 	};
 };
+

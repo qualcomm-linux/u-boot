@@ -42,20 +42,6 @@ config SYS_CONFIG_NAME
 	  Based on this option include/configs/<CONFIG_SYS_CONFIG_NAME>.h header
 	  will be used for board configuration.
 
-config SPL_QCOM_BOOT_FROM_PBL
-	bool "U-Boot SPL is loaded directly by PBL"
-	depends on SPL
-	default y
-	help
-	  Enable this option when U-Boot SPL is loaded directly by PBL (Primary
-	  Boot Loader). In this case, PBL passes boot parameters via r0 register
-	  containing a pointer to pbl_shared_data structure.
-	  
-	  Disable this option when U-Boot SPL is loaded by XBL or another
-	  intermediate bootloader (e.g., PBL->XBL->U-Boot SPL). In such cases,
-	  the r0 register won't contain valid PBL shared data, and boot device
-	  detection will use fallback mechanisms.
-
 config QCOM_FIT_MULTIDTB
 	bool "Enable FIT multi-DTB selection for Qualcomm platforms"
 	depends on FIT
