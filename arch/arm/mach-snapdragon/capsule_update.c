@@ -642,7 +642,8 @@ void qcom_configure_capsule_updates(void)
 	memset(partitions, 0, sizeof(qcom_partitions));
 
 	if (IS_ENABLED(CONFIG_SCSI)) {
-		ret = scsi_scan(false);
+		/* Scan for SCSI devices, unless already scanned earlier in boot */
+		ret = scsi_scan_new(false);
 		if (ret) {
 			debug("Failed to scan SCSI devices: %d\n", ret);
 			return;
