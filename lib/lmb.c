@@ -752,8 +752,6 @@ static int _lmb_alloc_addr(phys_addr_t base, phys_size_t size, u32 flags)
 				      base + size - 1, 1))
 			/* ok, reserve the memory */
 			return lmb_reserve(base, size, flags);
-
-		return -EINVAL;
 	}
 
 	return -EFAULT;
