@@ -13,6 +13,10 @@
 		tcsr = <&tcsr>;
 		tcsr-hw-version-offset = <0x8000>;
 	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
 };
 
 &sdhc_1 {
