@@ -30,6 +30,7 @@ enum wdt_reg {
 
 struct qcom_wdt_match_data {
 	const u32 *offset;
+	ulong fixed_clk_rate;
 };
 
 struct qcom_wdt {
@@ -48,6 +49,15 @@ static const u32 reg_offset_data_kpss[] = {
 
 static const struct qcom_wdt_match_data match_data_kpss = {
 	.offset = reg_offset_data_kpss,
+};
+
+/*
+ * qcom,msm-watchdog shares the same register layout as qcom,kpss-wdt but
+ * has no clocks= property - it runs off a fixed 32765 Hz sleep clock tick.
+ */
+static const struct qcom_wdt_match_data match_data_msm = {
+	.offset = reg_offset_data_kpss,
+	.fixed_clk_rate = 32765,
 };
 
 static void __iomem *wdt_addr(struct qcom_wdt *wdt, enum wdt_reg reg)
@@ -119,6 +129,11 @@ static int qcom_wdt_probe(struct udevice *dev)
 	wdt->base = dev_read_addr_ptr(dev);
 	wdt->layout = data->offset;
 
+	if (data->fixed_clk_rate) {
+		wdt->clk_rate = data->fixed_clk_rate;
+		return qcom_wdt_stop(dev);
+	}
+
 	ret = clk_get_by_index(dev, 0, &clk);
 	if (ret)
 		return ret;
@@ -140,6 +155,7 @@ static const struct wdt_ops qcom_wdt_ops = {
 
 static const struct udevice_id qcom_wdt_ids[] = {
 	{ .compatible = "qcom,kpss-wdt", .data = (ulong)&match_data_kpss },
+	{ .compatible = "qcom,msm-watchdog", .data = (ulong)&match_data_msm },
 	{}
 };
 
