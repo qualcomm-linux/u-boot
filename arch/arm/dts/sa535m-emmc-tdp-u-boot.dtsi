@@ -29,3 +29,9 @@
 		 <&gcc GCC_SDCC1_APPS_CLK>;
 	clock-names = "iface", "core";
 };
+
+&usb_1 {
+	dr_mode = "peripheral";
+
+	status = "okay";
+};
