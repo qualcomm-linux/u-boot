@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ */
+
+/dts-v1/;
+
+#include "sa535m.dtsi"
+
+/ {
+	model = "Qualcomm Technologies, Inc. SA535M EMMC TDP";
+	compatible = "qcom,echo";
+	qcom,msm-id = <703 0x10000>;
+	qcom,board-id = <0x10030 0x0>;
+};
+
+&sdhc_1 {
+	non-removable;
+	no-sd;
+	no-sdio;
+
+	vmmc-supply = <&ldo_3p3_0_g0>;
+	vqmmc-supply = <&vreg_l6b_1p8>;
+
+	status = "okay";
+
+	pinctrl-0 = <&sdc1_clk>, <&sdc1_cmd>, <&sdc1_data>, <&sdc1_rclk>;
+	pinctrl-1 = <&sdc1_clk_sleep>, <&sdc1_cmd_sleep>, <&sdc1_data_sleep>,
+			<&sdc1_rclk_sleep>;
+	pinctrl-names = "default", "sleep";
+
+	bus-width = <8>;
+	supports-cqe;
+	operating-points-v2 = <&sdhc1_opp_table>;
+
+	mmc-ddr-1_8v;
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
+	mmc-hs400-enhanced-strobe;
+	qcom,ice = <&ice_mmc>;
+};
