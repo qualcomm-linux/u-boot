@@ -1,0 +1,83 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ */
+
+/dts-v1/;
+
+#include "sa535m.dtsi"
+
+/ {
+	model = "Qualcomm Technologies, Inc. SA535M NAND TDP";
+	compatible = "qcom,echo";
+	qcom,msm-id = <703 0x10000>;
+	qcom,board-id = <0x10030 0x20000>;
+
+	qcom_smem_bridge {
+		compatible = "qcom,smem-bridge";
+		qcom,smem-item = <627>;
+		qcom,smem-offset = <0>;
+	};
+};
+
+&qnand_1 {
+	status = "okay";
+};
+
+&tlmm {
+	sd_cd: sd-cd-state {
+		pins = "gpio69";
+		function = "gpio";
+		bias-disable;
+		drive-strength = <2>;
+	};
+};
+
+&pmx75_gpios {
+	ldo_1p8_2p95_en_state: ldo-1p8-2p95-en-state {
+		pins = "gpio12";
+		function = "normal";
+		output-high;
+		bias-disable;
+		qcom,drive-strength = <2>;
+		power-source = <0>;
+	};
+};
+
+&ldo_1p8_2p95_g0 {
+	gpios = <&tlmm 131 GPIO_ACTIVE_HIGH>;
+	enable-gpio = <&pmx75_gpios 12 GPIO_ACTIVE_HIGH>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&ldo_1p8_2p95_en_state>;
+};
+
+&ldo_3p3_0_g0 {
+	enable-gpio = <&pmx75_gpios 12 GPIO_ACTIVE_HIGH>;
+	startup-delay-us = <5000>;
+	enable-active-high;
+};
+
+&sdhc_1 {
+	status = "okay";
+
+	no-mmc;
+	no-sdio;
+	qcom,uses_level_shifter;
+
+	cd-gpios = <&tlmm 69 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&sdc1_clk>, <&sdc1_cmd>, <&sdc1_data>, <&sd_cd>;
+	pinctrl-1 = <&sdc1_clk_sleep>, <&sdc1_cmd_sleep>, <&sdc1_data_sleep>,
+			<&sd_cd>;
+	pinctrl-names = "default", "sleep";
+	bus-width = <4>;
+
+	vmmc-supply = <&ldo_3p3_0_g0>;
+	qcom,vdd-voltage-level = <2950000 2950000>;
+	qcom,vdd-current-level = <0 800000>;
+
+	vqmmc-supply = <&ldo_1p8_2p95_g0>;
+	qcom,vdd-io-voltage-level = <1800000 2950000>;
+	qcom,vdd-io-current-level = <0 22000>;
+
+	operating-points-v2 = <&sdhc2_opp_table>;
+};
