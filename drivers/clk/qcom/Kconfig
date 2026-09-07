@@ -23,6 +23,22 @@ config CLK_QCOM_APQ8096
 	  on the Snapdragon APQ8096 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config CLK_QCOM_ECHO
+	bool "Qualcomm sa535m (Echo) GCC"
+	select CLK_QCOM
+	help
+	  Say Y here to enable support for the Global Clock Controller
+	  on the Snapdragon sa535m SoC. This driver supports the clocks
+	  and resets exposed by the GCC hardware block.
+
+config CLK_QCOM_ECHO_TCSR
+	bool "Qualcomm sa535m (Echo) TCSRCC"
+	select CLK_QCOM
+	help
+	  Say Y here to enable support for the TCSR Clock Controller
+	  on the Snapdragon sa535m SoC. This driver supports the USB/PCIe
+	  clkref-enable clocks exposed by the TCSRCC hardware block.
+
 config CLK_QCOM_IPQ4019
 	bool "Qualcomm IPQ4019 GCC"
 	select CLK_QCOM
