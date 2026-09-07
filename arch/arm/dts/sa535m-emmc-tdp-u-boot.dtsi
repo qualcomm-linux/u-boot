@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ */
+
+/ {
+	qcom_hwinfo: qcom-hwinfo {
+		compatible = "qcom,hwinfo";
+
+		imem = <&sram>;
+		imem-boot-cookie-offset = <0x0>;
+
+		tcsr = <&tcsr>;
+		tcsr-hw-version-offset = <0x8000>;
+	};
+};
+
+&sdhc_1 {
+	/*
+	 * qcom,echo-rpmh-clk has no U-Boot driver; strip the xo clock
+	 * so clk_get_bulk() does not fail resolving an unimplemented
+	 * clock provider.
+	 */
+	clocks = <&gcc GCC_SDCC1_AHB_CLK>,
+		 <&gcc GCC_SDCC1_APPS_CLK>;
+	clock-names = "iface", "core";
+};
