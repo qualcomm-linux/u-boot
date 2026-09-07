@@ -60,6 +60,14 @@ config SPL_PINCTRL_QCOM_APQ8096
 	  SPL variant of PINCTRL_QCOM_APQ8096.
 	  See the help of PINCTRL_QCOM_APQ8096 for details.
 
+config PINCTRL_QCOM_ECHO
+	bool "Qualcomm sa535m (Echo) Pinctrl"
+	default y if PINCTRL_QCOM_GENERIC
+	select PINCTRL_QCOM
+	help
+	  Say Y here to enable support for pinctrl on the Snapdragon
+	  sa535m SoC, as well as the associated GPIO driver.
+
 config PINCTRL_QCOM_IPQ4019
 	bool "Qualcomm IPQ4019 Pinctrl"
 	default y if PINCTRL_QCOM_GENERIC
