@@ -9,6 +9,7 @@ obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_IPQ5210) += pinctrl-ipq5210.o
 obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_IPQ5424) += pinctrl-ipq5424.o
 obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_IPQ9574) += pinctrl-ipq9574.o
 obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_APQ8096) += pinctrl-apq8096.o
+obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_ECHO) += pinctrl-echo.o
 obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_MILOS) += pinctrl-milos.o
 obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_QCM2290) += pinctrl-qcm2290.o
 obj-$(CONFIG_$(PHASE_)PINCTRL_QCOM_QCS404) += pinctrl-qcs404.o
