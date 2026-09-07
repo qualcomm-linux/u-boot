@@ -1,0 +1,35 @@
+# Configuration for building U-Boot in sa535m EMMC TDP
+
+#include "qcom_defconfig"
+#include "board/qualcomm/debug-sa535m-emmc-tdp.config"
+
+# Otherwise buildman thinks this isn't an ARM platform
+CONFIG_ARM=y
+
+# CONFIG_OF_UPSTREAM is not set
+
+CONFIG_DEFAULT_DEVICE_TREE="sa535m-emmc-tdp"
+
+# Address where U-Boot will be loaded
+CONFIG_TEXT_BASE=0x83E00000
+CONFIG_REMAKE_ELF=y
+
+CONFIG_FASTBOOT_BUF_ADDR=0xB0500000
+
+CONFIG_PHY_QCOM_QMP_USB=y
+CONFIG_PHY_QCOM_M31_EUSB2=y
+
+CONFIG_WATCHDOG_AUTOSTART=y
+
+# sa535m-emmc-tdp has eMMC only, not UFS/SCSI - override qcom_defconfig settings
+CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME="mmc"
+CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID=0
+
+# CONFIG_SCSI is not set
+
+# Environment stored in eMMC logfs partition
+CONFIG_ENV_IS_IN_MMC=y
+CONFIG_ENV_MMC_USE_SW_PARTITION=y
+CONFIG_ENV_MMC_SW_PARTITION="logfs"
+CONFIG_ENV_OFFSET=0x0
+CONFIG_ENV_SIZE=0x4000
