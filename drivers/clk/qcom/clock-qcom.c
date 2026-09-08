@@ -50,13 +50,21 @@ void clk_enable_cbc(phys_addr_t cbcr)
 
 void clk_enable_gpll0(phys_addr_t base, const struct pll_vote_clk *gpll0)
 {
+	unsigned int count;
+
 	if (readl(base + gpll0->status) & gpll0->status_bit)
 		return; /* clock already enabled */
 
 	setbits_le32(base + gpll0->ena_vote, gpll0->vote_bit);
 
-	while ((readl(base + gpll0->status) & gpll0->status_bit) == 0)
-		;
+	for (count = 0; count < 2000000; count++) {
+		if (readl(base + gpll0->status) & gpll0->status_bit)
+			return;
+		udelay(1);
+	}
+
+	log_warning("PLL failed to lock: status reg=%#x\n",
+		    readl(base + gpll0->status));
 }
 
 #define BRANCH_ON_VAL (0)
