@@ -484,8 +484,15 @@ static ulong echo_set_rate(struct clk *clk, ulong rate)
 				     freq->pre_div, freq->m, freq->n, freq->src, 16);
 		return freq->freq;
 	case GCC_SDCC1_APPS_CLK:
-		clk_enable_gpll0(priv->base, &gpll6_vote_clk);
 		freq = qcom_find_freq(ftbl_gcc_sdcc1_apps_clk_src, rate);
+		/*
+		 * GPLL6 never locks on this board (PLL_RESET_N=0 at reset,
+		 * and this vote-only helper never programs PLL_MODE/L_VAL/
+		 * ALPHA_VAL), so only vote/wait on it when the selected freq
+		 * entry actually sources from it.
+		 */
+		if (freq->src == CFG_CLK_SRC_GPLL6_OUT_MAIN)
+			clk_enable_gpll0(priv->base, &gpll6_vote_clk);
 		clk_rcg_set_rate_mnd(priv->base, GCC_SDCC1_APPS_CLK_CMD_RCGR,
 				     freq->pre_div, freq->m, freq->n, freq->src, 8);
 		return freq->freq;
