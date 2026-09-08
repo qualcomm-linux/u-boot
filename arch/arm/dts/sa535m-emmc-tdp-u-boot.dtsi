@@ -19,6 +19,32 @@
 	};
 };
 
+/*
+ * serial0 (aliases -> &uart1, serial@a84000) is left "disabled" in
+ * echo.dtsi since it is the debug/BT UART shared by many boards; this
+ * board uses it as its console, so enable it here rather than in the
+ * shared dtsi. This is also CONFIG_DEBUG_UART_BASE (see
+ * board/qualcomm/debug-sa535m-emmc-tdp.config), which is why raw debug
+ * output was already visible on this port even while the DM serial
+ * console failed to bind.
+ */
+&uart1 {
+	status = "okay";
+};
+
+/*
+ * qupv3_id_0 (the GENI QUP wrapper housing serial@a84000/uart1) carries
+ * status = "ok" in echo.dtsi instead of the DT-spec "okay". U-Boot's
+ * of_device_is_available() only accepts the exact string "okay", so this
+ * wrapper -- and every child SE beneath it, including uart1 -- was never
+ * bound by dm_scan_fdt_node(), regardless of the children's own status.
+ * This is the actual root cause of "No serial driver found"; the &uart1
+ * fix above was necessary but not sufficient on its own.
+ */
+&qupv3_id_0 {
+	status = "okay";
+};
+
 &sdhc_1 {
 	/*
 	 * qcom,echo-rpmh-clk has no U-Boot driver; strip the xo clock
