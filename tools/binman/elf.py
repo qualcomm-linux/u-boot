@@ -551,7 +551,6 @@ def read_loadable_segments(data):
             raise ValueError(err)
         entry = elf.header['e_entry']
         segments = []
-        n = 0
         for i in range(elf.num_segments()):
             segment = elf.get_segment(i)
             if segment['p_type'] != 'PT_LOAD' or not segment['p_memsz']:
@@ -559,8 +558,7 @@ def read_loadable_segments(data):
                 continue
             start = segment['p_offset']
             rend = start + segment['p_filesz']
-            segments.append((n, segment['p_paddr'], data[start:rend]))
-            n = n + 1
+            segments.append((i, segment['p_paddr'], data[start:rend]))
     return segments, entry
 
 def is_valid(data):

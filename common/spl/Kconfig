@@ -1387,14 +1387,6 @@ config SPL_RAM_DEVICE
 	  be already in memory when SPL takes over, e.g. loaded by the boot
 	  ROM.
 
-config SPL_SMEM
-	bool "Support SMEM (Shared Memory manager)"
-	depends on SMEM
-	help
-	  Enable support for the Shared Memory Manager. The driver provides an
-	  interface to items in a heap shared among all processors. This enables
-	  the drivers in drivers/smem as part of an SPL build.
-
 config SPL_PCI_DFU
 	bool "PCIe boot support"
 	depends on SPL_PCI_ENDPOINT

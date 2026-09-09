@@ -14,7 +14,6 @@
 #define GENI_INIT_CFG_REVISION		0x0
 #define GENI_S_INIT_CFG_REVISION	0x4
 #define GENI_FORCE_DEFAULT_REG		0x20
-#define GENI_OUTPUT_CTRL		0x24
 #define GENI_CGC_CTRL			0x28
 #define GENI_CFG_REG0			0x100
 
@@ -173,17 +172,6 @@ struct elf_se_hdr {
 };
 
 struct udevice;
-
-struct qup_mini_core_info {
-	u16 serial_protocol;
-	u16 fw_version;
-	u16 cfg_version;
-	u16 cfg_count;
-	u32 *cfg_val;
-	u8 *cfg_idx;
-	u32 *cfg_ram;
-	u32 cfg_ram_count;
-};
 
 int qcom_geni_load_firmware(phys_addr_t qup_base, struct udevice *dev);
 
