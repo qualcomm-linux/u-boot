@@ -1,7 +1,7 @@
 # Configuration for building U-Boot in Shikra IQS EVK
 
 #include "qcom_defconfig"
-#include "board/qualcomm/debug-shikra-iqs-evk.config"
+#include "board/qualcomm/debug-shikra-evk.config"
 
 # Otherwise buildman thinks this isn't an ARM platform
 CONFIG_ARM=y
