@@ -273,7 +273,7 @@ static int qcom_of_fixup_nodes(void * __maybe_unused ctx, struct event *event)
 
 	time_call(fixup_usb_nodes, root);
 
-	if (IS_ENABLED(CONFIG_OPTEE) && is_optee_smc_api())
+	if (CONFIG_IS_ENABLED(OPTEE) && is_optee_smc_api())
 		time_call(add_optee_node, root);
 
 	return 0;

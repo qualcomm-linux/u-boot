@@ -21,6 +21,10 @@ CONFIG_ENV_SCSI_PART_TYPE_GUID="bc0330eb-3410-4951-a617-03898dbe3372"
 # CONFIG_ENV_IS_DEFAULT is not set
 # CONFIG_ENV_IS_NOWHERE is not set
 
+CONFIG_TEE=y
+CONFIG_OPTEE=y
+CONFIG_OPTEE_LIB=y
+
 # SPL configurations for Nord-Ride
 # Purpose: Load FIT image (containing TFA, OPTEE and U-Boot proper)
 # from UFS storage and jump to next image (TFA)
