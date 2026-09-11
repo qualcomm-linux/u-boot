@@ -64,3 +64,15 @@
 		mode-edl = <0x80000000 0x00000001>;
 	};
 };
+
+&soc {
+	restart@c264000 {
+		compatible = "qcom,pshold";
+		reg = <0x0 0x0c264000 0x0 0x4>;
+		qcom,pon = <&pmm8654au_0_pon>;
+		qcom,pbs-pshold-sw-ctl = <0x52>;
+		qcom,pbs-pshold-reset-ctl2 = <0x53>;
+
+		bootph-all;
+	};
+};
