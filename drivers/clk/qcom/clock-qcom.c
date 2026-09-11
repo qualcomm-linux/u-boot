@@ -59,6 +59,63 @@ void clk_enable_gpll0(phys_addr_t base, const struct pll_vote_clk *gpll0)
 		;
 }
 
+#define PLL_MODE_ACTIVE_FLAG	BIT(30)
+#define PLL_MODE_BIAS_COUNT	GENMASK(19, 14)
+#define PLL_MODE_LOCK_COUNT	GENMASK(13, 8)
+#define PLL_MODE_VOTE_FSM_ENA	BIT(20)
+
+#define PLL_MODE_BIAS_COUNT_VAL	(0x6 << 14)
+#define PLL_MODE_LOCK_COUNT_VAL	(0x0 << 8)
+
+#define PLL_L_VAL_OFFSET	0x4
+#define PLL_ALPHA_VAL_OFFSET	0x8
+#define PLL_ALPHA_VAL_U_OFFSET	0xc
+#define PLL_USER_CTL_OFFSET	0x18
+#define PLL_USER_CTL_U_OFFSET	0x1c
+#define PLL_CONFIG_CTL_OFFSET	0x20
+#define PLL_TEST_CTL_OFFSET	0x30
+#define PLL_TEST_CTL_U_OFFSET	0x34
+
+#define PLL_LOCK_TIMEOUT_US	200
+
+void clk_configure_enable_pll(phys_addr_t base, const struct pll_config *pll)
+{
+	u32 mode = readl(base + pll->mode_reg);
+	unsigned int count;
+
+	if ((mode & PLL_MODE_VOTE_FSM_ENA) &&
+	    (readl(base + pll->ena_vote) & pll->vote_bit) == pll->vote_bit &&
+	    (mode & PLL_MODE_ACTIVE_FLAG))
+		return;
+
+	writel(0, base + pll->mode_reg);
+	writel(pll->user_ctl_u, base + pll->mode_reg + PLL_USER_CTL_U_OFFSET);
+	writel(pll->config_ctl, base + pll->mode_reg + PLL_CONFIG_CTL_OFFSET);
+	writel(pll->test_ctl, base + pll->mode_reg + PLL_TEST_CTL_OFFSET);
+	writel(pll->test_ctl_u, base + pll->mode_reg + PLL_TEST_CTL_U_OFFSET);
+	writel(pll->user_ctl, base + pll->mode_reg + PLL_USER_CTL_OFFSET);
+	writel(pll->l_val, base + pll->mode_reg + PLL_L_VAL_OFFSET);
+	writel(pll->alpha_val, base + pll->mode_reg + PLL_ALPHA_VAL_OFFSET);
+	writel(pll->alpha_val_u, base + pll->mode_reg + PLL_ALPHA_VAL_U_OFFSET);
+
+	mode &= ~(PLL_MODE_BIAS_COUNT | PLL_MODE_LOCK_COUNT);
+	mode |= PLL_MODE_BIAS_COUNT_VAL | PLL_MODE_LOCK_COUNT_VAL |
+		PLL_MODE_VOTE_FSM_ENA;
+	writel(mode, base + pll->mode_reg);
+
+	setbits_le32(base + pll->ena_vote, pll->vote_bit);
+
+	for (count = 0; count < PLL_LOCK_TIMEOUT_US; count++) {
+		if (readl(base + pll->mode_reg) & PLL_MODE_ACTIVE_FLAG)
+			return;
+		udelay(1);
+	}
+
+	WARN(count == PLL_LOCK_TIMEOUT_US,
+	     "PLL @ %#llx [%#010x] never locked\n",
+	     base + pll->mode_reg, readl(base + pll->mode_reg));
+}
+
 #define BRANCH_ON_VAL (0)
 #define BRANCH_NOC_FSM_ON_VAL BIT(29)
 #define BRANCH_CHECK_MASK GENMASK(31, 28)
