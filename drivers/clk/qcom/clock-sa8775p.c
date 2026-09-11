@@ -25,6 +25,7 @@
 #define UFS_PHY_UNIPRO_CORE_CLK_CMD_RCGR	0x8308c
 
 #define SDCC1_APPS_CLK_CMD_RCGR			0x20014
+#define QUPV3_WRAP3_S0_CLK_CMD_RCGR		0xc4154
 
 #define APCS_GPLL9_STATUS			0x9000
 #define APCS_GPLLX_ENA_REG			0x4b028
@@ -53,6 +54,26 @@
 #define GCC_QUPV3_WRAP2_S6_CLK_ENA_BIT BIT(29)
 
 #define GCC_QUPV3_WRAP3_S0_CLK_ENA_BIT BIT(25)
+#define GCC_QUPV3_WRAP_3_M_AHB_ENA_BIT BIT(27)
+#define GCC_QUPV3_WRAP_3_S_AHB_ENA_BIT BIT(20)
+#define GCC_QUPV3_WRAP3_QSPI_ENA_BIT BIT(26)
+#define GCC_AGGRE_NOC_QUPV3_AXI_ENA_BIT BIT(28)
+
+/* QUP Wrapper 3 SE0 (SPI) clock frequency table */
+static const struct freq_tbl ftbl_gcc_qupv3_wrap3_s0_clk_src[] = {
+	F(7372800,   CFG_CLK_SRC_GPLL0_EVEN, 1, 384, 15625),
+	F(14745600,  CFG_CLK_SRC_GPLL0_EVEN, 1, 768, 15625),
+	F(19200000,  CFG_CLK_SRC_CXO,        1,   0,     0),
+	F(29491200,  CFG_CLK_SRC_GPLL0_EVEN, 1, 1536, 15625),
+	F(32000000,  CFG_CLK_SRC_GPLL0_EVEN, 1,   8,    75),
+	F(48000000,  CFG_CLK_SRC_GPLL0,      2,   4,    25),
+	F(64000000,  CFG_CLK_SRC_GPLL0_EVEN, 1,  16,    75),
+	F(75000000,  CFG_CLK_SRC_GPLL0_EVEN, 4,   0,     0),
+	F(80000000,  CFG_CLK_SRC_GPLL0_EVEN, 1,   4,    15),
+	F(96000000,  CFG_CLK_SRC_GPLL0_EVEN, 1,   8,    25),
+	F(100000000, CFG_CLK_SRC_GPLL0,      6,   0,     0),
+	{ }
+};
 
 /* UFS AXI clock frequency table */
 static const struct freq_tbl ftbl_gcc_ufs_phy_axi_clk_src[] = {
@@ -147,6 +168,12 @@ static ulong sa8775p_set_rate(struct clk *clk, ulong rate)
 		clk_rcg_set_rate_mnd(priv->base, SDCC1_APPS_CLK_CMD_RCGR,
 				     freq->pre_div, freq->m, freq->n, freq->src, 8);
 		return freq->freq;
+	case GCC_QUPV3_WRAP3_S0_CLK:
+		freq = qcom_find_freq(ftbl_gcc_qupv3_wrap3_s0_clk_src, rate);
+		clk_rcg_set_rate_mnd(priv->base, QUPV3_WRAP3_S0_CLK_CMD_RCGR,
+				     freq->pre_div, freq->m, freq->n,
+				     freq->src, 16);
+		return freq->freq;
 	default:
 		return 0;
 	}
@@ -189,7 +216,11 @@ static const struct gate_clk sa8775p_clks[] = {
 	GATE_CLK(GCC_QUPV3_WRAP2_S6_CLK, 0x4b018, GCC_QUPV3_WRAP2_S6_CLK_ENA_BIT),
 
 	/* QUP Wrapper 3 clocks */
+	GATE_CLK(GCC_QUPV3_WRAP_3_M_AHB_CLK, 0x4b000, GCC_QUPV3_WRAP_3_M_AHB_ENA_BIT),
+	GATE_CLK(GCC_QUPV3_WRAP_3_S_AHB_CLK, 0x4b000, GCC_QUPV3_WRAP_3_S_AHB_ENA_BIT),
 	GATE_CLK(GCC_QUPV3_WRAP3_S0_CLK, 0x4b000, GCC_QUPV3_WRAP3_S0_CLK_ENA_BIT),
+	GATE_CLK(GCC_QUPV3_WRAP3_QSPI_CLK, 0x4b000, GCC_QUPV3_WRAP3_QSPI_ENA_BIT),
+	GATE_CLK(GCC_AGGRE_NOC_QUPV3_AXI_CLK, 0x4b000, GCC_AGGRE_NOC_QUPV3_AXI_ENA_BIT),
 
 	/* UFS PHY clocks */
 	GATE_CLK_POLLED(GCC_UFS_PHY_AXI_CLK, 0x83018, BIT(0), 0x83018),
@@ -228,6 +259,10 @@ static int sa8775p_enable(struct clk *clk)
 	case GCC_USB30_PRIM_MASTER_CLK:
 		qcom_gate_clk_en(priv, GCC_USB3_PRIM_PHY_AUX_CLK);
 		qcom_gate_clk_en(priv, GCC_USB3_PRIM_PHY_COM_AUX_CLK);
+		break;
+	case GCC_QUPV3_WRAP3_S0_CLK:
+		qcom_gate_clk_en(priv, GCC_QUPV3_WRAP3_QSPI_CLK);
+		qcom_gate_clk_en(priv, GCC_AGGRE_NOC_QUPV3_AXI_CLK);
 		break;
 	}
 
