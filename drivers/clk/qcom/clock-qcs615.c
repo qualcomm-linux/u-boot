@@ -52,6 +52,16 @@ static const struct freq_tbl ftbl_gcc_sdcc2_apps_clk_src[] = {
 	{ }
 };
 
+#define GPLL8_STATUS 0x1b000
+#define GPLL8_ENA_VOTE 0x52000
+
+static const struct pll_vote_clk gpll8_vote_clk = {
+	.status = GPLL8_STATUS,
+	.status_bit = BIT(31),
+	.ena_vote = GPLL8_ENA_VOTE,
+	.vote_bit = BIT(8),
+};
+
 #define GCC_QUPV3_WRAP0_S0_CLK_ENA_BIT BIT(10)
 #define GCC_QUPV3_WRAP0_S1_CLK_ENA_BIT BIT(11)
 #define GCC_QUPV3_WRAP0_S2_CLK_ENA_BIT BIT(12)
@@ -138,6 +148,8 @@ static ulong qcs615_set_rate(struct clk *clk, ulong rate)
 		return freq->freq;
 	case GCC_SDCC2_APPS_CLK:
 		freq = qcom_find_freq(ftbl_gcc_sdcc2_apps_clk_src, rate);
+		if (freq->src == CFG_CLK_SRC_GPLL8)
+			clk_enable_gpll0(priv->base, &gpll8_vote_clk);
 		clk_rcg_set_rate_mnd(priv->base, SDCC2_APPS_CLK_CMD_RCGR,
 				     freq->pre_div, freq->m, freq->n, freq->src, 8);
 		return freq->freq;
