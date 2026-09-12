@@ -31,6 +31,8 @@
 #include <tee/optee.h>
 #include <time.h>
 
+#include "qcom_fixup_handlers.h"
+
 /**
  * find_ssphy_node() - Find the super-speed PHY node referenced by DWC3
  * @dwc3: DWC3 device node
@@ -272,7 +274,6 @@ static int qcom_of_fixup_nodes(void * __maybe_unused ctx, struct event *event)
 	struct device_node *root = event->data.of_live_built.root;
 
 	time_call(fixup_usb_nodes, root);
-
 	if (IS_ENABLED(CONFIG_OPTEE) && is_optee_smc_api())
 		time_call(add_optee_node, root);
 
@@ -289,14 +290,16 @@ int ft_board_setup(void *blob, struct bd_info __maybe_unused *bd)
 	const void *prop;
 	int proplen;
 
+	/* Apply hypervisor DT fixup (e.g. VM overlay), if applicable */
+	hypervisor_fixup_handler((struct fdt_header *)blob);
+
 	/* Only apply fixup for QCS615, QCS6490, and QCS8300 platforms */
 	if (!of_device_is_compatible(gd->of_root, "qcom,talos-evk", NULL, NULL) &&
 	    !of_device_is_compatible(gd->of_root, "qcom,qcs615", NULL, NULL) &&
 	    !of_device_is_compatible(gd->of_root, "qcom,qcs6490-rb3gen2", NULL, NULL) &&
 	    !of_device_is_compatible(gd->of_root, "qcom,qcm6490", NULL, NULL) &&
-	    !of_device_is_compatible(gd->of_root, "qcom,qcs8300", NULL, NULL)) {
+	    !of_device_is_compatible(gd->of_root, "qcom,qcs8300", NULL, NULL))
 		return 0;
-	}
 
 	/* Get U-Boot's reserved-memory node */
 	uboot_parent_np = of_find_node_by_path("/reserved-memory");

@@ -8,5 +8,6 @@ obj-$(CONFIG_EFI_HAVE_CAPSULE_SUPPORT) += capsule_update.o
 obj-$(CONFIG_QCOM_FIT_MULTIDTB) += qcom_fit_multidtb.o
 obj-$(CONFIG_QCOM_HWDETECT) += qcom_hwdetect.o
 obj-$(CONFIG_OF_LIVE) += of_fixup.o
+obj-y += qcom_fixup_hypervisor.o
 endif
 obj-$(CONFIG_SPL_BUILD) += spl.o
