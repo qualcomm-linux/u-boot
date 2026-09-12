@@ -55,30 +55,7 @@
 		 <&gcc GCC_SDCC1_APPS_CLK>;
 	clock-names = "iface", "core";
 
-	/*
-	 * GPLL6 (the source selected by the SDCC1_APPS_CLK freq table for
-	 * rates >=192MHz) is left in reset by the earlier boot stage on
-	 * this board: PLL_MODE.PLL_RESET_N = 0 at reset, and
-	 * clk_enable_gpll0() only asserts the branch-enable vote and
-	 * polls PLL_STATUS.PLL_LOCK_DET -- it never programs PLL_MODE/
-	 * L_VAL/ALPHA_VAL to actually bring the PLL up. The vote can
-	 * therefore never lock (PLL_STATUS reads back 0x0), which stalls
-	 * eMMC clock setup for several seconds per attempt. Cap the rate
-	 * at 100MHz so the freq table only ever selects a GPLL0_EVEN
-	 * (src=1536) entry and GPLL6 is never voted.
-	 */
-	max-frequency = <100000000>;
-
-	/*
-	 * Disable HS200/HS400 host capabilities so the MMC core never
-	 * selects a mode requiring CMD/DATA tuning or DLL calibration
-	 * (sdhci_msm_execute_tuning()/msm_init_cm_dll()/
-	 * sdhci_msm_hs400_dll_calibration()). Full boot chain (loading
-	 * the EFI image and booting HLOS) does not need eMMC HS200/HS400
-	 * throughput, and the DLL never locks on this board bring-up,
-	 * which was producing long busy-timeout/tuning-retry storms.
-	 */
-	/delete-property/ mmc-hs200-1_8v;
+	/delete-property/ mmc-ddr-1_8v;
 	/delete-property/ mmc-hs400-1_8v;
 	/delete-property/ mmc-hs400-enhanced-strobe;
 };
