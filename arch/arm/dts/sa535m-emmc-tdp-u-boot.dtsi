@@ -77,3 +77,14 @@
 
 	status = "okay";
 };
+
+/*
+ * wdog (qcom,wdt@17410000) carries status = "ok" in echo.dtsi instead of the
+ * DT-spec "okay". U-Boot's of_device_is_available() accepts only the exact
+ * string "okay", so the node was never bound by dm_scan_fdt_node() and
+ * CONFIG_WDT_QCOM + CONFIG_WATCHDOG_AUTOSTART had no device to start. Same
+ * trap as qupv3_id_0 above.
+ */
+&wdog {
+       status = "okay";
+};
