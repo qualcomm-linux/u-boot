@@ -84,7 +84,13 @@ void clk_enable_vote_clk(phys_addr_t base, const struct vote_clk *vclk)
 
 int qcom_gate_clk_en(const struct msm_clk_priv *priv, unsigned long id)
 {
-	if (id >= priv->data->num_clks || priv->data->clks[id].reg == 0) {
+	/*
+	 * Detect unpopulated slots via en_val, not reg: an empty designated-
+	 * initializer entry is all-zero, but a valid gate clock always has a
+	 * nonzero enable mask (BIT(n)) while its reg offset may legitimately
+	 * be 0 (e.g. echo TCSR_USB3_CLKREF_EN at offset 0x0).
+	 */
+	if (id >= priv->data->num_clks || priv->data->clks[id].en_val == 0) {
 		log_err("gcc@%#08llx: unknown clock ID %lu!\n",
 			priv->base, id);
 		return -ENOENT;
