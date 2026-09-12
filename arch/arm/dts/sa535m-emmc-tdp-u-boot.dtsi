@@ -78,13 +78,24 @@
 	 * throughput, and the DLL never locks on this board bring-up,
 	 * which was producing long busy-timeout/tuning-retry storms.
 	 */
-	/delete-property/ mmc-ddr-1_8v;
 	/delete-property/ mmc-hs200-1_8v;
 	/delete-property/ mmc-hs400-1_8v;
 	/delete-property/ mmc-hs400-enhanced-strobe;
 };
 
 &usb_1 {
+	/*
+	 * echo.dtsi declares usb_1 as non-flat "qcom,dwc3" but gives it no
+	 * "snps,dwc3" child and a reg pointing at the DWC3 core (0xa600000),
+	 * so dwc3-generic.c binds the glue wrapper but never binds a
+	 * controller (dwc3_glue_bind() finds no subnode) -- fastboot then
+	 * fails with udc_device_get_by_index() -> -ENODEV. Retarget to the
+	 * flat "qcom,snps-dwc3" binding (as shikra.dtsi does), which treats
+	 * this node itself as the controller and derives the QSCRATCH base at
+	 * core + 0xf8800 (0xa6f8800, within the 0x200000 reg window).
+	 */
+	compatible = "qcom,echo-dwc3", "qcom,snps-dwc3";
+
 	dr_mode = "peripheral";
 
 	status = "okay";

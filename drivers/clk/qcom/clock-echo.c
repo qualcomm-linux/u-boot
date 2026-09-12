@@ -651,7 +651,14 @@ static const struct gate_clk echo_clks[] = {
 	GATE_CLK_POLLED(GCC_USB30_SLEEP_CLK, 0x27034, BIT(0), 0x27034),
 	GATE_CLK_POLLED(GCC_USB30_SLV_AHB_CLK, 0x27030, BIT(0), 0x27030),
 	GATE_CLK_POLLED(GCC_USB3_PHY_AUX_CLK, 0x27070, BIT(0), 0x27070),
-	GATE_CLK_POLLED(GCC_USB3_PHY_PIPE_CLK, 0x27074, BIT(0), 0x27074),
+	/*
+	 * USB3 pipe clock is sourced from the QMP PHY's own pipe output, so its
+	 * branch cannot report running until the PHY serdes has been started
+	 * (later, in the PHY driver's power_on). Use non-polled GATE_CLK -- as
+	 * every other qcom clk driver does for USB3_PHY_PIPE -- so enabling it
+	 * during clk_enable_bulk() does not poll the CBCR and time out (-EBUSY).
+	 */
+	GATE_CLK(GCC_USB3_PHY_PIPE_CLK, 0x27074, BIT(0)),
 	GATE_CLK_POLLED(GCC_USB_PHY_CFG_AHB2PHY_CLK, 0x29004, BIT(0), 0x29004),
 };
 
