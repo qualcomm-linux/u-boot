@@ -240,7 +240,14 @@ static struct pll_vote_clk gpll5_vote_clk = {
 };
 
 static struct pll_vote_clk gpll6_vote_clk = {
-	.status = 0x600c,
+	/*
+	 * GPLL6 is preconfigured (L_VAL=20 -> 384MHz) and left in FSM/vote
+	 * mode by the boot firmware, which also write-locks the PLL_MODE/
+	 * OPMODE/USER_CTL registers. Enabling it is therefore vote-only: set
+	 * the vote bit and wait for lock. LOCK_DET lives in PLL_MODE bit31
+	 * (offset 0x0), not PLL_STATUS (0xc), which reads 0 even when locked.
+	 */
+	.status = 0x6000,
 	.status_bit = BIT(31),
 	.ena_vote = 0x7d020,
 	.vote_bit = BIT(6),
@@ -486,10 +493,9 @@ static ulong echo_set_rate(struct clk *clk, ulong rate)
 	case GCC_SDCC1_APPS_CLK:
 		freq = qcom_find_freq(ftbl_gcc_sdcc1_apps_clk_src, rate);
 		/*
-		 * GPLL6 never locks on this board (PLL_RESET_N=0 at reset,
-		 * and this vote-only helper never programs PLL_MODE/L_VAL/
-		 * ALPHA_VAL), so only vote/wait on it when the selected freq
-		 * entry actually sources from it.
+		 * The 192/384MHz entries (HS200/HS400) source from GPLL6, so
+		 * vote it on and wait for lock before switching the RCG. Lower
+		 * rates use GPLL0_EVEN and skip this.
 		 */
 		if (freq->src == CFG_CLK_SRC_GPLL6_OUT_MAIN)
 			clk_enable_gpll0(priv->base, &gpll6_vote_clk);
