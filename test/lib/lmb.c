@@ -781,9 +781,9 @@ static int test_alloc_addr(struct unit_test_state *uts, const phys_addr_t ram)
 		ret = lmb_alloc_addr(ram_end, 1, LMB_NONE);
 		ut_asserteq(ret, -EFAULT);
 		ret = lmb_alloc_addr(ram_end - 1, 2, LMB_NOMAP);
-		ut_asserteq(ret, -EINVAL);
+		ut_asserteq(ret, -EFAULT);
 		ret = lmb_alloc_addr(ram_end - 1, 2, LMB_NOOVERWRITE);
-		ut_asserteq(ret, -EINVAL);
+		ut_asserteq(ret, -EFAULT);
 	}
 	if (ram != 0) {
 		ret = lmb_alloc_addr(ram - 1, 1, LMB_NONE);
