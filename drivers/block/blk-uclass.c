@@ -128,6 +128,9 @@ struct blk_desc *blk_get_devnum_by_uclass_idname(const char *uclass_idname, int 
 		return NULL;
 	}
 
+	if (uclass_id == UCLASS_MTD)
+		return blk_get_devnum_by_uclass_id(UCLASS_MTD, devnum);
+
 	ret = uclass_get(UCLASS_BLK, &uc);
 	if (ret)
 		return NULL;
