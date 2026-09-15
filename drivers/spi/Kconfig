@@ -463,6 +463,15 @@ config SPI_QUP
 	  mode supports up to 50MHz, up to four chip selects, programmable
 	  data path from 4 bits to 32 bits and numerous protocol variants.
 
+config SPI_GENI_QCOM
+	bool "Qualcomm GENI SPI controller"
+	depends on DM_SPI && QCOM_GENI
+	help
+	  Enable support for the SPI Serial Engine of the Qualcomm Generic
+	  Interface (GENI) based Qualcomm Universal Peripheral (QUP) wrapper.
+	  Used to access SPI devices such as SPI-NOR flash on Qualcomm SoCs
+	  that have a GENI/QUPv3 wrapper, e.g. SDM845, SM8250, SA8775P.
+
 config RENESAS_RPC_SPI
 	bool "Renesas RPC SPI driver"
 	depends on RCAR_64 || RZA1
