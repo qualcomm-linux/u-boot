@@ -282,6 +282,30 @@ enum geni_se_protocol_type {
 #define GENI_SE_VERSION_MINOR(ver) ((ver & HW_VER_MINOR_MASK) >> HW_VER_MINOR_SHFT)
 #define GENI_SE_VERSION_STEP(ver) (ver & HW_VER_STEP_MASK)
 
+/*
+ * geni_se_fifo_depth_mask() - Pick the TX/RX SE_HW_PARAM_x fifo depth mask
+ * for a given QUP_HW_VER_REG value.
+ * @hw_version: value read from QUP_HW_VER_REG
+ * @depth_mask_256: mask to use on HW that supports 256-byte-deep fifos
+ *                   (QUP HW version >= 3.10, 8-bit depth field)
+ * @depth_mask: mask to use on older HW (6-bit depth field)
+ *
+ * QUP HW version >= 3.10 widened the fifo depth field in SE_HW_PARAM_0
+ * (TX) and SE_HW_PARAM_1 (RX) from 6 bits to 8 bits; both fields are
+ * gated by the same major/minor check.
+ */
+static inline u32 geni_se_fifo_depth_mask(u32 hw_version, u32 depth_mask_256,
+					  u32 depth_mask)
+{
+	u32 hw_major = GENI_SE_VERSION_MAJOR(hw_version);
+	u32 hw_minor = GENI_SE_VERSION_MINOR(hw_version);
+
+	if ((hw_major == 3 && hw_minor >= 10) || hw_major > 3)
+		return depth_mask_256;
+
+	return depth_mask;
+}
+
 /* QUP SE VERSION value for major number 2 and minor number 5 */
 #define QUP_SE_VERSION_2_5                  0x20050000
 
