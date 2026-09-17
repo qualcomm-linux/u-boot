@@ -126,6 +126,18 @@ config QCOM_GENI_MINICORE
 	help
 	  Enable support for minicores in Qualcomm GENI and its peripherals.
 
+config QCOM_GENI_FW_LATE_INIT
+	bool "Load GENI SE firmware for all peripherals at late init"
+	depends on QCOM_GENI && !XPL_BUILD
+	default y
+	help
+	  Automatically load QUP firmware for all GENI peripherals that need
+	  it at EVT_LAST_STAGE_INIT time. Individual GENI peripheral drivers
+	  (UART, I2C, ...) already load firmware on-demand during their own
+	  probe() if it hasn't been loaded yet, so this can be safely disabled
+	  on boards where the bulk late-init path (which probes block devices
+	  to find the firmware partition) causes issues.
+
 config ROCKCHIP_EFUSE
 	bool "Rockchip e-fuse support"
 	depends on MISC

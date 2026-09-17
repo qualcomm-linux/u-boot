@@ -21,6 +21,10 @@ CONFIG_PHY_QCOM_M31_EUSB2=y
 
 CONFIG_WATCHDOG_AUTOSTART=y
 
+# Bulk GENI FW late-init probes block devices and hangs on this board;
+# peripheral drivers already load firmware on-demand during their own probe.
+# CONFIG_QCOM_GENI_FW_LATE_INIT is not set
+
 # sa535m-emmc-tdp has eMMC only, not UFS/SCSI - override qcom_defconfig settings
 CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME="mmc"
 CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID=0
