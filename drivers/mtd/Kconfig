@@ -39,6 +39,15 @@ config MTD_BLOCK
 	  Enable support for block device access to MTD devices
 	  using blk_ops abstraction.
 
+config MTD_BLOCK_SIZE
+	hex "MTD logical block size"
+	depends on MTD_BLOCK
+	default 0x1000
+	help
+	  Logical block size exposed by mtdblock/ubiblock devices to the
+	  block layer. This is the sector size used for GPT partitioning,
+	  not the underlying flash erase size.
+
 config SYS_MTDPARTS_RUNTIME
 	bool "Allow MTDPARTS to be configured at runtime"
 	depends on !COMPILE_TEST
