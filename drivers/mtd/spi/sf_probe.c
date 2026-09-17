@@ -9,12 +9,15 @@
 
 #include <dm.h>
 #include <errno.h>
+#include <linux/mtd/mtd.h>
 #include <linux/mtd/spi-nor.h>
 #include <log.h>
 #include <malloc.h>
+#include <part.h>
 #include <spi.h>
 #include <spi_flash.h>
 #include <spi-mem.h>
+#include <dm/device_compat.h>
 
 #include "sf_internal.h"
 
@@ -99,6 +102,28 @@ static int spi_flash_probe_slave(struct spi_flash *flash)
 	ret = spi_nor_scan(flash);
 	if (ret)
 		goto err_read_id;
+
+#if CONFIG_IS_ENABLED(MTD_BLOCK)
+	if (CONFIG_IS_ENABLED(DM_SPI_FLASH)) {
+		struct mtd_info **plat = dev_get_plat(flash->dev);
+		struct udevice *bdev;
+		struct blk_desc *bdesc;
+
+		/* The mtdblock child is created by jedec_spi_nor_bind(). */
+		ret = blk_find_from_parent(flash->dev, &bdev);
+		if (ret) {
+			dev_err(flash->dev, "mtdblock child not found: %d\n", ret);
+			goto err_read_id;
+		}
+
+		bdesc = dev_get_uclass_plat(bdev);
+		*plat = &flash->mtd;
+		bdesc->blksz = CONFIG_MTD_BLOCK_SIZE;
+		bdesc->log2blksz = LOG2(bdesc->blksz);
+		bdesc->lba = lldiv(flash->mtd.size, bdesc->blksz);
+		bdesc->part_type = PART_TYPE_UNKNOWN;
+	}
+#endif
 
 	if (CONFIG_IS_ENABLED(SPI_DIRMAP)) {
 		ret = spi_nor_create_read_dirmap(flash);
@@ -253,13 +278,23 @@ static const struct udevice_id spi_flash_std_ids[] = {
 	{ }
 };
 
+static int jedec_spi_nor_bind(struct udevice *dev)
+{
+	if (!CONFIG_IS_ENABLED(MTD_BLOCK))
+		return 0;
+
+	return mtd_bind(dev, dev_get_plat(dev));
+}
+
 U_BOOT_DRIVER(jedec_spi_nor) = {
 	.name		= "jedec_spi_nor",
 	.id		= UCLASS_SPI_FLASH,
 	.of_match	= spi_flash_std_ids,
+	.bind		= jedec_spi_nor_bind,
 	.probe		= spi_flash_std_probe,
 	.remove		= spi_flash_std_remove,
 	.priv_auto	= sizeof(struct spi_nor),
+	.plat_auto	= sizeof(struct mtd_info *),
 	.ops		= &spi_flash_std_ops,
 	.flags		= DM_FLAG_OS_PREPARE,
 };
