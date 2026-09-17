@@ -9,6 +9,7 @@ ifeq ($(CONFIG_SPL_BUILD),y)
 obj-y += board_spl.o
 obj-y += fit-handler.o
 obj-y += pbl-shared-data.o
+obj-y += qclib.o
 else
 obj-y += board.o
 obj-$(CONFIG_EFI_HAVE_CAPSULE_SUPPORT) += capsule_update.o
