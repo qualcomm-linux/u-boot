@@ -7,6 +7,7 @@
 
 #include <hang.h>
 #include <spl.h>
+#include <soc/qcom/smem.h>
 
 /* in SPL, we always use internal DT */
 int board_fdt_blob_setup(void **fdtp)
