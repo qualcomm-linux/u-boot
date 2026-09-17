@@ -12,6 +12,8 @@
 #include <spl.h>
 #include <soc/qcom/smem.h>
 
+DECLARE_GLOBAL_DATA_PTR;
+
 /* in SPL, we always use internal DT */
 int __weak board_fdt_blob_setup(void **fdtp)
 {
