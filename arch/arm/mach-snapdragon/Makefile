@@ -7,6 +7,7 @@ obj-y += mem_map.o
 
 ifeq ($(CONFIG_SPL_BUILD),y)
 obj-y += board_spl.o
+obj-y += fit-handler.o
 obj-y += pbl-shared-data.o
 else
 obj-y += board.o
