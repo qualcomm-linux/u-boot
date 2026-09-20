@@ -27,6 +27,48 @@
 		tcsr = <&tcsr>;
 		tcsr-hw-version-offset = <0x8000>;
 	};
+
+	clocks {
+		/* Fixed clocks needed by GCC */
+		xo_board_clk {
+			bootph-all;
+		};
+
+		sleep_clk {
+			bootph-all;
+		};
+	};
+};
+
+&ufs_mem_hc {
+	bootph-all; /* Enable UFS for SPL */
+};
+
+&ufs_mem_phy {
+	bootph-all;
+};
+
+&gcc {
+	bootph-all; /* Enable GCC for SPL */
+};
+
+/* RPMH clock controller - required by GCC */
+&rpmhcc {
+	bootph-all;
+};
+
+/* Apps RSC - parent of rpmhcc and rpmhpd */
+&apps_rsc {
+	bootph-all;
+};
+
+/* UART10 - console serial port */
+&uart10 {
+	bootph-all;
+};
+
+&tlmm {
+	bootph-all;   /* Make TLMM GPIO controller available in SPL */
 };
 
 /* Enter Qualcomm EDL/download mode via "reset -edl". */
