@@ -24,13 +24,18 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-static struct mm_region rbx_mem_map[CONFIG_NR_DRAM_BANKS + 2] = { { 0 } };
+/*
+ * Space for one entry per DRAM bank, one entry per inter-bank gap,
+ * plus the peripheral block entry and the terminator.
+ */
+static struct mm_region rbx_mem_map[2 * CONFIG_NR_DRAM_BANKS + 2] = { { 0 } };
 
 struct mm_region *mem_map = rbx_mem_map;
 
 static void build_mem_map(void)
 {
 	int i, j;
+	phys_addr_t prev_end;
 
 	/*
 	 * Ensure the peripheral block is sized to correctly cover the address range
@@ -46,12 +51,33 @@ static void build_mem_map(void)
 			 PTE_BLOCK_NON_SHARE |
 			 PTE_BLOCK_PXN | PTE_BLOCK_UXN;
 
-	for (i = 1, j = 0; i < ARRAY_SIZE(rbx_mem_map) - 1 && gd->dram[j].size; i++, j++) {
+	/*
+	 * Map gaps between DRAM banks as device memory. These regions
+	 * are not usable RAM but must remain mapped for attribute updates.
+	 */
+	i = 1;
+	prev_end = gd->dram[0].start;
+	for (j = 0; i < ARRAY_SIZE(rbx_mem_map) - 1 && gd->dram[j].size; j++) {
+		if (gd->dram[j].start > prev_end) {
+			mem_map[i].phys = prev_end;
+			mem_map[i].virt = mem_map[i].phys;
+			mem_map[i].size = gd->dram[j].start - prev_end;
+			mem_map[i].attrs = PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+					   PTE_BLOCK_NON_SHARE |
+					   PTE_BLOCK_PXN | PTE_BLOCK_UXN |
+					   PTE_BLOCK_RO;
+			i++;
+			if (i >= ARRAY_SIZE(rbx_mem_map) - 1)
+				break;
+		}
+
 		mem_map[i].phys = gd->dram[j].start;
 		mem_map[i].virt = mem_map[i].phys;
 		mem_map[i].size = gd->dram[j].size;
 		mem_map[i].attrs = PTE_BLOCK_MEMTYPE(MT_NORMAL) | \
 				   PTE_BLOCK_INNER_SHARE;
+		prev_end = gd->dram[j].start + gd->dram[j].size;
+		i++;
 	}
 
 	mem_map[i].phys = UINT64_MAX;
