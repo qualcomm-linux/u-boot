@@ -25,3 +25,53 @@
 &{/soc@0/sram@c11e000} {
 	compatible = "qcom,shikra-imem", "syscon", "simple-mfd";
 };
+
+/* Keep the console and QUPFW storage paths in the SPL device tree. */
+&gcc {
+	bootph-all;
+};
+
+&tlmm {
+	bootph-all;
+};
+
+&qup_uart0_default {
+	bootph-all;
+};
+
+&sdc1_state_on {
+	bootph-all;
+};
+
+&sdc1_state_off {
+	bootph-all;
+};
+
+&sdhc_1 {
+	bootph-all;
+};
+
+&qupv3_0 {
+	u-boot,qupfw-storage = <&sdhc_1>;
+	bootph-all;
+};
+
+&uart0 {
+	bootph-all;
+};
+
+&rpm {
+	bootph-all;
+
+	glink-edge {
+		bootph-all;
+
+		rpm-requests {
+			bootph-all;
+
+			clock-controller {
+				bootph-all;
+			};
+		};
+	};
+};

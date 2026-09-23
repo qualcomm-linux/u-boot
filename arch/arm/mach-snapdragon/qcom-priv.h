@@ -5,6 +5,8 @@
 
 #include <stdbool.h>
 
+struct mm_region;
+
 /**
  * enum qcom_boot_source - Track where we got loaded from.
  * Used for capsule update logic.
@@ -39,5 +41,7 @@ static inline void qcom_configure_capsule_updates(void) {}
 #endif /* EFI_HAVE_CAPSULE_SUPPORT */
 
 int qcom_parse_memory(const void *fdt, bool fdt_is_internal);
+
+struct mm_region *qcom_spl_mem_map(void);
 
 #endif /* __QCOM_PRIV_H__ */

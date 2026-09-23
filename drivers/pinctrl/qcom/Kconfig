@@ -259,6 +259,14 @@ config PINCTRL_QCOM_SHIKRA
 	  Say Y here to enable support for pinctrl on the Snapdragon Shikra SoC,
 	  as well as the associated GPIO driver.
 
+config SPL_PINCTRL_QCOM_SHIKRA
+	bool "Qualcomm Shikra Pinctrl in SPL"
+	depends on SPL_PINCTRL_GENERIC
+	select SPL_PINCTRL_QCOM
+	help
+	  SPL variant of PINCTRL_QCOM_SHIKRA.
+	  See the help of PINCTRL_QCOM_SHIKRA for details.
+
 config PINCTRL_QCOM_SDM670
 	bool "Qualcomm SDM670 Pinctrl"
 	default y if PINCTRL_QCOM_GENERIC
@@ -445,4 +453,3 @@ config SPL_PINCTRL_QCOM_X1E80100
 endmenu
 
 endif
-
