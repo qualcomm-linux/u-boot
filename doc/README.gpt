@@ -179,6 +179,17 @@ To restore GUID partition table one needs to:
    "part list <interface> <dev> -bootable <varname>",
    please check out doc/develop/distro.rst for use.
 
+   The field 'attrs' is optional and requires CONFIG_PARTITION_ATTR to be
+   enabled. It sets the full 64-bit GPT partition attributes field (decimal
+   or 0x-prefixed hex value), allowing other attribute flags such as
+   "System partition", "Hide from EFI", or bits 48-63 to be set directly,
+   in addition to what 'bootable' provides.
+     "name=u-boot,size=60MiB;name=boot,size=60Mib,attrs=0x8000000000000001"
+   If both 'attrs' and 'bootable' are given, the Legacy BIOS bootable bit
+   (bit 2) is always forced to 1, regardless of the value passed via
+   'attrs'. If 'attrs' is not given, the attributes field defaults to 0
+   except for the Legacy BIOS bootable bit set via 'bootable'.
+
 2. Define 'CONFIG_EFI_PARTITION' and 'CONFIG_CMD_GPT'
 
 3. From u-boot prompt type:
