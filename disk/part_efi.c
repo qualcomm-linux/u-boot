@@ -307,6 +307,8 @@ static int __maybe_unused part_get_info_efi(struct blk_desc *desc, int part,
 	strcpy((char *)info->type, "U-Boot");
 	info->bootable = get_bootable(&gpt_pte);
 	info->type_flags = gpt_pte.attributes.fields.type_guid_specific;
+	if (CONFIG_IS_ENABLED(PARTITION_ATTR))
+		disk_partition_set_gpt_attr(info, gpt_pte.attributes.raw);
 	if (CONFIG_IS_ENABLED(PARTITION_UUIDS)) {
 		uuid_bin_to_str(gpt_pte.unique_partition_guid.b,
 				(char *)disk_partition_uuid(info),
