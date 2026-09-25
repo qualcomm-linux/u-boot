@@ -528,8 +528,13 @@ int gpt_fill_pte(struct blk_desc *desc,
 		}
 
 		/* partition attributes */
-		memset(&gpt_e[i].attributes, 0,
-		       sizeof(gpt_entry_attributes));
+		if (CONFIG_IS_ENABLED(PARTITION_ATTR) &&
+		    disk_partition_gpt_attr_valid(&partitions[i]))
+			gpt_e[i].attributes.raw =
+				disk_partition_gpt_attr(&partitions[i]);
+		else
+			memset(&gpt_e[i].attributes, 0,
+			       sizeof(gpt_entry_attributes));
 
 		if (partitions[i].bootable & PART_BOOTABLE)
 			gpt_e[i].attributes.fields.legacy_bios_bootable = 1;
