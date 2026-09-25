@@ -73,6 +73,10 @@ struct disk_partition {
 	 */
 	int	bootable;
 	u16	type_flags;	/* top 16 bits of GPT partition attributes	*/
+#if CONFIG_IS_ENABLED(PARTITION_ATTR)
+	u64 gpt_attr;		/* raw 64-bit GPT partition attributes, if attrs= was given */
+	bool gpt_attr_valid;	/* true if attrs= was present in the partitions list */
+#endif
 #if CONFIG_IS_ENABLED(PARTITION_UUIDS)
 	char	uuid[UUID_STR_LEN + 1];	/* filesystem UUID as string, if exists	*/
 #endif
@@ -108,6 +112,32 @@ static inline void disk_partition_clr_uuid(struct disk_partition *info)
 {
 #if CONFIG_IS_ENABLED(PARTITION_UUIDS)
 	*info->uuid = '\0';
+#endif
+}
+
+static inline u64 disk_partition_gpt_attr(const struct disk_partition *info)
+{
+#if CONFIG_IS_ENABLED(PARTITION_ATTR)
+	return info->gpt_attr;
+#else
+	return 0;
+#endif
+}
+
+static inline bool disk_partition_gpt_attr_valid(const struct disk_partition *info)
+{
+#if CONFIG_IS_ENABLED(PARTITION_ATTR)
+	return info->gpt_attr_valid;
+#else
+	return false;
+#endif
+}
+
+static inline void disk_partition_set_gpt_attr(struct disk_partition *info, u64 val)
+{
+#if CONFIG_IS_ENABLED(PARTITION_ATTR)
+	info->gpt_attr = val;
+	info->gpt_attr_valid = true;
 #endif
 }
 
