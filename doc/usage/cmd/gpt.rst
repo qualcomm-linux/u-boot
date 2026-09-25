@@ -56,6 +56,7 @@ partition string
     * start=<BYTES> - The partition start offset in bytes, required
     * size=<BYTES> - The partition size in bytes or "-" for the last partition to expand it to the whole free area
     * bootable - Set the legacy bootable flag
+    * attrs=<VALUE> - The GPT partition attributes, optional if CONFIG_PARTITION_ATTR=y is enabled
     * uuid=<UUID> - The partition UUID, optional if CONFIG_RANDOM_UUID=y is enabled
     * type=<UUID> - The partition type GUID, requires CONFIG_PARTITION_TYPE_GUID=y
 
@@ -140,6 +141,10 @@ gpt_partition_entry
 gpt_partition_bootable
     1 if the partition is marked as bootable, 0 if not
 
+gpt_partition_attrs
+    the full 64-bit GPT partition attributes field as a hexadecimal number,
+    requires CONFIG_PARTITION_ATTR=y
+
 gpt swap
 ~~~~~~~~
 
@@ -173,6 +178,8 @@ Configuration
 
 To use the 'gpt' command you must specify CONFIG_CMD_GPT=y. To enable 'gpt
 read', 'gpt swap' and 'gpt rename', you must specify CONFIG_CMD_GPT_RENAME=y.
+To set the full GPT partition attributes field via 'attrs=', you must specify
+CONFIG_PARTITION_ATTR=y.
 
 Examples
 ~~~~~~~~
@@ -181,7 +188,7 @@ Create 6 partitions on a disk::
 
     => setenv gpt_parts 'uuid_disk=bec9fc2a-86c1-483d-8a0e-0109732277d7;\
     name=boot,start=4M,size=128M,bootable,type=ebd0a0a2-b9e5-4433-87c0-68b6b72699c7;\
-    name=rootfs,size=3072M,type=0fc63daf-8483-4772-8e79-3d69d8477de4;\
+    name=rootfs,size=3072M,attrs=0x8000000000000001,type=0fc63daf-8483-4772-8e79-3d69d8477de4;\
     name=system-data,size=512M,type=0fc63daf-8483-4772-8e79-3d69d8477de4;\
     name=user,size=512M,type=0fc63daf-8483-4772-8e79-3d69d8477de4;\
     name=modules,size=100M,type=0fc63daf-8483-4772-8e79-3d69d8477de4;\
@@ -210,6 +217,8 @@ Get the information about the partition named 'rootfs'::
     2
     => echo ${gpt_partition_bootable}
     0
+    => echo ${gpt_partition_attrs}
+    0x8000000000000001
 
 Get the list of partition names on the disk::
 
