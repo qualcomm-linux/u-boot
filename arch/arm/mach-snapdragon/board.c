@@ -480,3 +480,22 @@ int board_late_init(void)
 
 	return 0;
 }
+
+int board_fix_fdt(void *rw_fdt_blob)
+{
+	if (IS_ENABLED(CONFIG_QCOM_SNAGBOOT_SPI_NOR_FIXUP)) {
+		int spi_off, parent_off;
+
+		spi_off = fdt_path_offset(rw_fdt_blob, fdt_get_alias(rw_fdt_blob, "spi0"));
+		if (spi_off >= 0) {
+			parent_off = fdt_parent_offset(rw_fdt_blob, spi_off);
+
+			fdt_status_okay(rw_fdt_blob, spi_off);
+
+			if (parent_off >= 0)
+				fdt_status_okay(rw_fdt_blob, parent_off);
+		}
+	}
+
+	return 0;
+}

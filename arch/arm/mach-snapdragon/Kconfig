@@ -118,6 +118,17 @@ config QCOM_SNAGBOOT_MODE
 	  Platform-specific requirements:
 	  - Set CONFIG_COUNTER_FREQUENCY to match your platform's timer
 	  - Configure CONFIG_TEXT_BASE for U-Boot load address
+
+config QCOM_SNAGBOOT_SPI_NOR_FIXUP
+	bool "Enable spi0-aliased SPI-NOR node for Snagboot mode"
+	depends on QCOM_SNAGBOOT_MODE
+	select OF_BOARD_FIXUP
+	help
+	  Enable the SPI-NOR flash node referenced by the "spi0" alias (and
+	  its parent bus node) when booting in Snagboot mode. Boards that
+	  use a different medium for Snagboot provisioning should leave
+	  this disabled.
+
 config QCOM_GENERATE_MBN
 	bool "Generate an MBN-compatible ELF binary"
 	help
