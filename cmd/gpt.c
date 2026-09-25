@@ -592,6 +592,17 @@ static int set_gpt_info(struct blk_desc *dev_desc,
 
 		offset += parts[i].size + parts[i].start;
 
+		if (CONFIG_IS_ENABLED(PARTITION_ATTR)) {
+			/* attrs */
+			val = extract_val(tok, "attrs");
+			if (val) {	/* 'attrs' is optional */
+				if (extract_env(val, &p))
+					p = val;
+				disk_partition_set_gpt_attr(&parts[i], simple_strtoull(p, NULL, 0));
+				free(val);
+			}
+		}
+
 		/* bootable */
 		if (found_key(tok, "bootable"))
 			parts[i].bootable = PART_BOOTABLE;
@@ -754,7 +765,8 @@ static int gpt_enumerate(struct blk_desc *desc)
  * gpt_setenv_part_variables() - setup partition environmental variables
  *
  * Setup the gpt_partition_name, gpt_partition_entry, gpt_partition_addr
- * and gpt_partition_size, gpt_partition_bootable environment variables.
+ * and gpt_partition_size, gpt_partition_bootable and gpt_partition_attrs
+ * environment variables.
  *
  * @pinfo: pointer to disk partition
  * @i: partition entry
@@ -784,6 +796,16 @@ static int gpt_setenv_part_variables(struct disk_partition *pinfo, int i)
 	ret = env_set_ulong("gpt_partition_bootable", !!(pinfo->bootable & PART_BOOTABLE));
 	if (ret)
 		goto fail;
+
+	if (CONFIG_IS_ENABLED(PARTITION_ATTR)) {
+		char attrs_str[19];	/* "0x" + 16 hex digits + NUL */
+
+		snprintf(attrs_str, sizeof(attrs_str), "0x%016llx",
+			disk_partition_gpt_attr(pinfo));
+		ret = env_set("gpt_partition_attrs", attrs_str);
+		if (ret)
+			goto fail;
+	}
 
 	return 0;
 
@@ -1207,7 +1229,7 @@ U_BOOT_CMD(gpt, CONFIG_SYS_MAXARGS, 1, do_gpt,
 	"    - setup environment variables for partition $name:\n"
 	"      gpt_partition_addr, gpt_partition_size,\n"
 	"      gpt_partition_name, gpt_partition_entry,\n"
-	"      gpt_partition_bootable\n"
+	"      gpt_partition_bootable, gpt_partition_attrs\n"
 	" gpt enumerate mmc 0\n"
 	"    - store list of partitions to gpt_partition_list environment variable\n"
 	" gpt guid <interface> <dev>\n"

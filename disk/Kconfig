@@ -176,4 +176,12 @@ config SPL_PARTITION_TYPE_GUID
 	  Activate the configuration of GUID type
 	  for EFI partition
 
+config PARTITION_ATTR
+	bool "Enable support of full GPT partition attributes"
+	depends on EFI_PARTITION
+	help
+	  Activate storing and writing the full 64-bit GPT partition
+	  attributes field via the 'attrs=' key in the 'gpt write'
+	  partitions list, in addition to the legacy bootable bit.
+
 endmenu

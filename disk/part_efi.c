@@ -307,6 +307,8 @@ static int __maybe_unused part_get_info_efi(struct blk_desc *desc, int part,
 	strcpy((char *)info->type, "U-Boot");
 	info->bootable = get_bootable(&gpt_pte);
 	info->type_flags = gpt_pte.attributes.fields.type_guid_specific;
+	if (CONFIG_IS_ENABLED(PARTITION_ATTR))
+		disk_partition_set_gpt_attr(info, gpt_pte.attributes.raw);
 	if (CONFIG_IS_ENABLED(PARTITION_UUIDS)) {
 		uuid_bin_to_str(gpt_pte.unique_partition_guid.b,
 				(char *)disk_partition_uuid(info),
@@ -528,8 +530,13 @@ int gpt_fill_pte(struct blk_desc *desc,
 		}
 
 		/* partition attributes */
-		memset(&gpt_e[i].attributes, 0,
-		       sizeof(gpt_entry_attributes));
+		if (CONFIG_IS_ENABLED(PARTITION_ATTR) &&
+		    disk_partition_gpt_attr_valid(&partitions[i]))
+			gpt_e[i].attributes.raw =
+				disk_partition_gpt_attr(&partitions[i]);
+		else
+			memset(&gpt_e[i].attributes, 0,
+			       sizeof(gpt_entry_attributes));
 
 		if (partitions[i].bootable & PART_BOOTABLE)
 			gpt_e[i].attributes.fields.legacy_bios_bootable = 1;
@@ -604,16 +611,19 @@ static uint32_t partition_entries_offset(struct blk_desc *desc)
 int gpt_fill_header(struct blk_desc *desc, gpt_header *gpt_h, char *str_guid,
 		    int parts_count)
 {
+	u32 pte_blk_cnt = BLOCK_CNT(GPT_ENTRY_NUMBERS * sizeof(gpt_entry),
+				    desc);
+
 	gpt_h->signature = cpu_to_le64(GPT_HEADER_SIGNATURE_UBOOT);
 	gpt_h->revision = cpu_to_le32(GPT_HEADER_REVISION_V1);
 	gpt_h->header_size = cpu_to_le32(sizeof(gpt_header));
 	gpt_h->my_lba = cpu_to_le64(1);
 	gpt_h->alternate_lba = cpu_to_le64(desc->lba - 1);
-	gpt_h->last_usable_lba = cpu_to_le64(desc->lba - 34);
+	gpt_h->last_usable_lba = cpu_to_le64(desc->lba - pte_blk_cnt - 2);
 	gpt_h->partition_entry_lba =
 		cpu_to_le64(partition_entries_offset(desc));
 	gpt_h->first_usable_lba =
-		cpu_to_le64(le64_to_cpu(gpt_h->partition_entry_lba) + 32);
+		cpu_to_le64(le64_to_cpu(gpt_h->partition_entry_lba) + pte_blk_cnt);
 	gpt_h->num_partition_entries = cpu_to_le32(GPT_ENTRY_NUMBERS);
 	gpt_h->sizeof_partition_entry = cpu_to_le32(sizeof(gpt_entry));
 	gpt_h->header_crc32 = 0;
