@@ -27,7 +27,7 @@ __weak void reset_cpu(void)
 	hang();
 }
 
-u32 spl_boot_device(void)
+__weak u32 spl_boot_device(void)
 {
 	/* TODO: check boot reason to support UFS and sdcard */
 	u32 boot_device = BOOT_DEVICE_DFU;
