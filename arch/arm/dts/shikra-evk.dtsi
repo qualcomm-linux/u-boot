@@ -12,3 +12,15 @@
 &uart0 {
 	status = "okay";
 };
+
+&i2c3 {
+    status = "okay";
+};
+
+&i2c4 {
+    status = "okay";
+};
+
+&i2c5 {
+    status = "okay";
+};
