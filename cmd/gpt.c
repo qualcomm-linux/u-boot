@@ -592,6 +592,17 @@ static int set_gpt_info(struct blk_desc *dev_desc,
 
 		offset += parts[i].size + parts[i].start;
 
+		if (CONFIG_IS_ENABLED(PARTITION_ATTR)) {
+			/* attrs */
+			val = extract_val(tok, "attrs");
+			if (val) {	/* 'attrs' is optional */
+				if (extract_env(val, &p))
+					p = val;
+				disk_partition_set_gpt_attr(&parts[i], simple_strtoull(p, NULL, 0));
+				free(val);
+			}
+		}
+
 		/* bootable */
 		if (found_key(tok, "bootable"))
 			parts[i].bootable = PART_BOOTABLE;
