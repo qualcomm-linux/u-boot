@@ -49,6 +49,20 @@ config TCP_FUNCTION_FASTBOOT
 
 if FASTBOOT
 
+config FASTBOOT_EP_BUFFER_SIZE
+	hex "Fastboot bulk endpoint buffer size"
+	default 0x1000
+	help
+	  Size of the buffer used for fastboot bulk endpoint transfers.
+	  This bounds both the maximum length of a fastboot command received
+	  over USB and the chunk size used during the download data phase.
+	  A larger value is needed to accept long commands, for example
+	  "oem run" with a large command string.
+
+	  Must be an integral multiple of the endpoint maxpacket size (64,
+	  512 or 1024 bytes), otherwise transfers break on controllers such
+	  as DWC3.
+
 config FASTBOOT_BUF_ADDR
 	hex "Define FASTBOOT buffer address"
 	default 0x82000000 if MX6SX || MX6SL || MX6UL || MX6SLL
