@@ -211,6 +211,8 @@ static int mtd_blk_probe(struct udevice *dev)
 		pr_warn("MTD device '%s' is NAND, please use UBI devices instead\n",
 			mtd->name);
 
+	bdesc->lba = lldiv(mtd->size, bdesc->blksz);
+
 	return 0;
 }
 

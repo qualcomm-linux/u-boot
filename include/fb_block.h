@@ -102,4 +102,13 @@ void fastboot_block_write_sparse_image(struct blk_desc *dev_desc, struct disk_pa
 void fastboot_block_flash_write(const char *part_name, void *download_buffer,
 				u32 download_bytes, char *response);
 
+/**
+ * fastboot_block_set_target() - Override block interface/device at runtime
+ *
+ * @interface: New interface name (e.g. "scsi", "mtd"), or NULL to leave unchanged
+ * @device: New device number, or -1 to leave unchanged
+ * Return: 0 on success, -EINVAL if interface name too long
+ */
+int fastboot_block_set_target(const char *interface, int device);
+
 #endif // _FB_BLOCK_H_
