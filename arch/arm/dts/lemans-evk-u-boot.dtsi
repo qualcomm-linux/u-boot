@@ -78,3 +78,11 @@
 	};
 };
 
+&soc {
+	restart@c264000 {
+		compatible = "qcom,pshold";
+		reg = <0x0 0x0c264000 0x0 0x4>;
+		bootph-all;
+	};
+};
+
