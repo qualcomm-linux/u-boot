@@ -4,6 +4,7 @@
  */
 
 #include <dt-bindings/clock/qcom,nord-negcc.h>
+#include <dt-bindings/clock/qcom,nord-tcsrcc.h>
 
 / {
 	negcc: clock-controller@8900000 {
@@ -12,6 +13,16 @@
 		#clock-cells = <1>;
 		#reset-cells = <1>;
 		#power-domain-cells = <1>;
+	};
+
+	tcsrcc: clock-controller@f1d9000 {
+		compatible = "qcom,nord-tcsrcc",
+			     "syscon";
+		reg = <0x0 0x0f1d9000 0x0 0xf00c>;
+		clocks = <&xo_board_clk>;
+		#clock-cells = <1>;
+		#reset-cells = <1>;
+		bootph-all;
 	};
 
 	ufs_mem_phy: phy@1d40000 {
@@ -28,6 +39,84 @@
 		#phy-cells = <0>;
 
 		status = "okay";
+	};
+
+	/* eUSB2 HS PHY for usb_0. Reset via NE_GCC_QUSB2PHY_PRIM_BCR. */
+	usb_0_hsphy: phy@88ea000 {
+		compatible = "qcom,nord-snps-eusb2-phy",
+			     "qcom,sm8550-snps-eusb2-phy";
+		reg = <0x0 0x088ea000 0x0 0x154>;
+		#phy-cells = <0>;
+
+		clocks = <&tcsrcc TCSR_USB2_0_CLKREF_EN>;
+		clock-names = "ref";
+
+		resets = <&negcc NE_GCC_QUSB2PHY_PRIM_BCR>;
+
+		status = "okay";
+	};
+
+	usb_0_qmpphy: phy@88e1000 {
+		compatible = "qcom,nord-qmp-usb3-dp-phy",
+			     "qcom,x1e80100-qmp-usb3-dp-phy";
+		reg = <0x0 0x088e1000 0x0 0x3000>;
+
+		clocks = <&negcc NE_GCC_USB3_PRIM_PHY_AUX_CLK>,
+			 <&tcsrcc TCSR_USB3_0_CLKREF_EN>,
+			 <&negcc NE_GCC_USB3_PRIM_PHY_COM_AUX_CLK>,
+			 <&negcc NE_GCC_USB3_PRIM_PHY_PIPE_CLK>;
+		clock-names = "aux",
+			      "ref",
+			      "com_aux",
+			      "usb3_pipe";
+
+		power-domains = <&negcc NE_GCC_USB3_PHY_GDSC>;
+
+		resets = <&negcc NE_GCC_USB3_PHY_PRIM_BCR>,
+			 <&negcc NE_GCC_USB3_DP_PHY_PRIM_BCR>;
+		reset-names = "phy",
+			      "common";
+
+		#clock-cells = <1>;
+		#phy-cells = <1>;
+
+		status = "okay";
+	};
+
+	usb_0: usb@a600000 {
+		compatible = "qcom,nord-dwc3",
+			     "qcom,snps-dwc3";
+		reg = <0x0 0x0a600000 0x0 0xfc100>;
+
+		clocks = <&negcc NE_GCC_CNOC_USB3_PRIM_AXI_CLK>,
+			 <&negcc NE_GCC_USB31_PRIM_MASTER_CLK>,
+			 <&negcc NE_GCC_AGGRE_NOC_USB3_PRIM_AXI_CLK>,
+			 <&negcc NE_GCC_USB31_PRIM_SLEEP_CLK>,
+			 <&negcc NE_GCC_USB31_PRIM_MOCK_UTMI_CLK>,
+			 <&tcsrcc TCSR_USB3_0_CLKREF_EN>;
+		clock-names = "cfg_noc",
+			      "core",
+			      "iface",
+			      "sleep",
+			      "mock_utmi",
+			      "xo";
+
+		assigned-clocks = <&negcc NE_GCC_USB31_PRIM_MOCK_UTMI_CLK>,
+				  <&negcc NE_GCC_USB31_PRIM_MASTER_CLK>;
+		assigned-clock-rates = <19200000>, <200000000>;
+
+		power-domains = <&negcc NE_GCC_USB31_PRIM_GDSC>;
+
+		resets = <&negcc NE_GCC_USB31_PRIM_BCR>;
+
+		iommus = <&apps_smmu_0 0x1500 0x0>;
+
+		phys = <&usb_0_hsphy>, <&usb_0_qmpphy 0>;
+		phy-names = "usb2-phy", "usb3-phy";
+
+		dr_mode = "peripheral";
+		status = "okay";
+		bootph-all;
 	};
 
 	smem {
