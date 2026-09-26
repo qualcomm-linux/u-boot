@@ -15,6 +15,10 @@
 #include "clock-qcom.h"
 
 #define NE_GCC_QUPV3_WRAP2_S1_CLK_CMD_RCGR	0x382a8
+#define NE_GCC_USB31_PRIM_MASTER_CLK_CMD_RCGR	0x2a038
+#define NE_GCC_USB31_PRIM_MOCK_UTMI_CLK_CMD_RCGR	0x2a050
+#define NE_GCC_USB20_MASTER_CLK_CMD_RCGR	0x31030
+#define NE_GCC_USB20_MOCK_UTMI_CLK_CMD_RCGR	0x31048
 
 /*
  * negcc-nord.c calls qcom_branch_set_force_mem_core() on
@@ -37,6 +41,22 @@ static ulong nord_negcc_set_rate(struct clk *clk, ulong rate)
 		     "Unexpected rate for NE_GCC_QUPV3_WRAP2_S1_CLK: %lu\n", rate);
 		clk_rcg_set_rate_mnd(priv->base, NE_GCC_QUPV3_WRAP2_S1_CLK_CMD_RCGR,
 				     1, 384, 15625, CFG_CLK_SRC_GPLL0, 16);
+		return rate;
+	case NE_GCC_USB31_PRIM_MASTER_CLK:
+		clk_rcg_set_rate_mnd(priv->base, NE_GCC_USB31_PRIM_MASTER_CLK_CMD_RCGR,
+				     3, 0, 0, CFG_CLK_SRC_GPLL0, 8);
+		return rate;
+	case NE_GCC_USB31_PRIM_MOCK_UTMI_CLK:
+		clk_rcg_set_rate_mnd(priv->base, NE_GCC_USB31_PRIM_MOCK_UTMI_CLK_CMD_RCGR,
+				     1, 0, 0, CFG_CLK_SRC_CXO, 0);
+		return rate;
+	case NE_GCC_USB20_MASTER_CLK:
+		clk_rcg_set_rate_mnd(priv->base, NE_GCC_USB20_MASTER_CLK_CMD_RCGR,
+				     5, 0, 0, CFG_CLK_SRC_GPLL0, 8);
+		return rate;
+	case NE_GCC_USB20_MOCK_UTMI_CLK:
+		clk_rcg_set_rate_mnd(priv->base, NE_GCC_USB20_MOCK_UTMI_CLK_CMD_RCGR,
+				     1, 0, 0, CFG_CLK_SRC_CXO, 0);
 		return rate;
 	default:
 		return 0;
