@@ -52,7 +52,6 @@
 };
 
 &qupv3_0 {
-	u-boot,qupfw-storage = <&sdhc_1>;
 	bootph-all;
 };
 
