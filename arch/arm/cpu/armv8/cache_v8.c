@@ -173,7 +173,7 @@ static int level2shift(int level)
 	return (12 + 9 * (3 - level));
 }
 
-static u64 *find_pte(u64 addr, int level)
+static u64 *find_pte_tbl(u64 *root, u64 addr, int level)
 {
 	int start_level = 0;
 	u64 *pte;
@@ -191,7 +191,7 @@ static u64 *find_pte(u64 addr, int level)
 		return NULL;
 
 	/* Walk through all page table levels to find our PTE */
-	pte = (u64*)gd->arch.tlb_addr;
+	pte = root;
 	for (i = start_level; i < 4; i++) {
 		idx = (addr >> level2shift(i)) & 0x1FF;
 		pte += idx;
@@ -209,6 +209,11 @@ static u64 *find_pte(u64 addr, int level)
 
 	/* Should never reach here */
 	return NULL;
+}
+
+static u64 *find_pte(u64 addr, int level)
+{
+	return find_pte_tbl((u64 *)gd->arch.tlb_addr, addr, level);
 }
 
 #ifdef CONFIG_CMO_BY_VA_ONLY
@@ -1003,11 +1008,11 @@ static bool is_aligned(u64 addr, u64 size, u64 align)
 }
 
 /* Use flag to indicate if attrs has more than d-cache attributes */
-static u64 set_one_region(u64 start, u64 size, u64 attrs, bool flag, int level)
+static u64 set_one_region_tbl(u64 *root, u64 start, u64 size, u64 attrs, bool flag, int level)
 {
 	int levelshift = level2shift(level);
 	u64 levelsize = 1ULL << levelshift;
-	u64 *pte = find_pte(start, level);
+	u64 *pte = find_pte_tbl(root, start, level);
 
 	/* Can we can just modify the current level block/page? */
 	if (is_aligned(start, size, levelsize)) {
@@ -1044,7 +1049,7 @@ static u64 set_one_region(u64 start, u64 size, u64 attrs, bool flag, int level)
 	return 0;
 }
 
-static void set_regions(u64 start, u64 size, u64 attrs, bool flag)
+static void set_regions_tbl(u64 *root, u64 start, u64 size, u64 attrs, bool flag)
 {
 	int level;
 	u64 r;
@@ -1055,7 +1060,7 @@ static void set_regions(u64 start, u64 size, u64 attrs, bool flag)
 	 */
 	while (size > 0) {
 		for (level = 1; level < 4; level++) {
-			r = set_one_region(start, size, attrs, flag, level);
+			r = set_one_region_tbl(root, start, size, attrs, flag, level);
 			if (r) {
 				/* PTE successfully replaced */
 				size -= r;
@@ -1064,6 +1069,11 @@ static void set_regions(u64 start, u64 size, u64 attrs, bool flag)
 			}
 		}
 	}
+}
+
+static void set_regions(u64 start, u64 size, u64 attrs, bool flag)
+{
+	set_regions_tbl((u64 *)gd->arch.tlb_addr, start, size, attrs, flag);
 }
 
 void mmu_set_region_dcache_behaviour(phys_addr_t start, size_t size,
@@ -1100,6 +1110,13 @@ void mmu_set_region_dcache_behaviour(phys_addr_t start, size_t size,
 void mmu_change_region_attr_nobreak(phys_addr_t addr, size_t size, u64 attrs)
 {
 	set_regions(addr, size, attrs, true);
+
+	/* Apply the same change to the emergency table, keeping it in sync
+	 * with the primary table.
+	 */
+	if (gd->arch.tlb_emerg)
+		set_regions_tbl((u64 *)gd->arch.tlb_emerg, addr, size, attrs, true);
+
 	flush_dcache_range(gd->arch.tlb_addr,
 			   gd->arch.tlb_addr + gd->arch.tlb_size);
 	__asm_invalidate_tlb_all();
