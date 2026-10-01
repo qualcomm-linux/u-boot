@@ -328,6 +328,7 @@ config SYS_MALLOC_LEN
 	default 0x4020000 if SUNXI_MINIMUM_DRAM_MB >= 256
 	default 0x220000 if SUNXI_MINIMUM_DRAM_MB >= 64
 	default 0x120000 if SUNXI_MINIMUM_DRAM_MB >= 32
+	default 0x10000000 if ARCH_SNAPDRAGON
 	default 0x400000
 	help
 	  This defines memory to be allocated for Dynamic allocation
