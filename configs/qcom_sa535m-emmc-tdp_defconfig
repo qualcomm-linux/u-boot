@@ -29,6 +29,15 @@ CONFIG_WATCHDOG_AUTOSTART=y
 CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME="mmc"
 CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID=0
 
+# The AMBOFIT FAT partition (mmc 0:23) holding boot.scr/amboseli-fit.itb is
+# not GPT-bootable, so unattended `bootflow scan -lb` (cmd/bootflow.c always
+# sets BOOTFLOWIF_ONLY_BOOTABLE) silently skips it in
+# bootdev_find_in_blk() (boot/bootdev-uclass.c) and never runs boot.scr -
+# even though it's directly reachable (e.g. `fatload mmc 0:23 ...`). Load
+# and source boot.scr directly from do_boot instead of relying on bootflow
+# scan's discovery; see board/qualcomm/amboseli.env.
+CONFIG_ENV_DEFAULT_ENV_TEXT_FILE="board/qualcomm/amboseli.env"
+
 # CONFIG_SCSI is not set
 
 # Environment stored in eMMC logfs partition
