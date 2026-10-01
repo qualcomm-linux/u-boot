@@ -1,0 +1,5 @@
+echo "Amboseli: loading kernel FIT"
+load ${devtype} ${devnum}:${distro_bootpart} ${kernel_addr_r} ${prefix}amboseli-fit.itb
+qcom_fit_select ${kernel_addr_r}
+echo "Amboseli: selected config ${fit_conf_name}"
+bootm ${kernel_addr_r}#${fit_conf_name}
