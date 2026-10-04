@@ -9,5 +9,6 @@
 void qcom_spl_malloc_init_f(void);
 int qcom_spl_loader_pre_ddr(u8 boot_device);
 void qcom_spl_error_handler(void *arg);
+int qcom_spl_cdt_load(void);
 
 #endif /* __SPL_H__ */
