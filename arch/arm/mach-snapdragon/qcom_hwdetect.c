@@ -38,6 +38,19 @@ static int qcom_get_hwinfo_dev(struct udevice **devp)
 {
 	int ret;
 
+	/*
+	 * Called from board_fdt_blob_setup() (pre-relocation, before
+	 * initf_dm() runs) as well as post-relocation callers. Driver model
+	 * doesn't exist yet in the former case - uclass_get_device_by_driver()
+	 * would just fail via uclass_get()'s -EDEADLK, but check directly and
+	 * return quietly, since this is an expected, not exceptional, call
+	 * pattern rather than a real probe failure.
+	 */
+	if (!gd->uclass_root) {
+		log_debug("qcom,hwinfo: driver model not ready yet\n");
+		return -EAGAIN;
+	}
+
 	ret = uclass_get_device_by_driver(UCLASS_MISC, DM_DRIVER_GET(qcom_hwinfo),
 					  devp);
 	if (ret)
@@ -98,7 +111,8 @@ int qcom_hwdetect_get_params(struct qcom_hw_params *params)
 
 	ret = qcom_get_hwinfo_dev(&hwinfo);
 	if (ret) {
-		log_err("qcom,hwinfo device not available\n");
+		if (ret != -EAGAIN)
+			log_err("qcom,hwinfo device not available\n");
 		return ret;
 	}
 
