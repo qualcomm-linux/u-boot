@@ -15,6 +15,7 @@
 #include <asm/psci.h>
 #include <asm/system.h>
 #include <blk.h>
+#include <boot_fit.h>
 #include <dm/device.h>
 #include <dm/pinctrl.h>
 #include <dm/uclass-internal.h>
@@ -114,6 +115,30 @@ int board_fdt_blob_setup(void **fdtp)
 	struct fdt_header *external_fdt, *internal_fdt;
 	bool internal_valid, external_valid;
 	int ret = -ENODATA;
+
+	/*
+	 * With CONFIG_MULTI_DTB_FIT, *fdtp is still the wrapped FIT container
+	 * at this point - fdtdec_setup() doesn't unwrap it via
+	 * setup_multi_dtb_fit() until after this hook returns. Unwrap it here
+	 * instead, so the SMEM/memory parsing below (and gd->fdt_blob
+	 * consumers like qcom_smem_init()'s ofnode_by_compatible()) see the
+	 * real board DTB rather than the FIT wrapper. setup_multi_dtb_fit()
+	 * runs again afterwards regardless; locate_dtb_in_fit() is a no-op
+	 * once gd->fdt_blob is already a plain board DTB.
+	 */
+	if (CONFIG_IS_ENABLED(MULTI_DTB_FIT)) {
+		void *real_dtb = locate_dtb_in_fit(*fdtp);
+
+		if (real_dtb) {
+			log_debug("board_fdt_blob_setup: unwrapped FIT at %p, using board DTB at %p\n",
+				  *fdtp, real_dtb);
+			*fdtp = real_dtb;
+			gd->fdt_blob = real_dtb;
+		} else {
+			log_debug("board_fdt_blob_setup: MULTI_DTB_FIT set but no FIT found at %p, using as-is\n",
+				  *fdtp);
+		}
+	}
 
 	internal_fdt = (struct fdt_header *)*fdtp;
 	external_fdt = (struct fdt_header *)get_prev_bl_fdt_addr();

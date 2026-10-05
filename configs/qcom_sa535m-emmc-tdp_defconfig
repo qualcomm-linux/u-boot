@@ -29,6 +29,17 @@ CONFIG_WATCHDOG_AUTOSTART=y
 CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME="mmc"
 CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID=0
 
+# CONFIG_MULTI_DTB_FIT wraps U-Boot's own control DTB in a FIT container.
+# Enabling it alone used to panic on real hardware with "Couldn't find a
+# valid memory map!": fdtdec_setup() (lib/fdtdec.c) calls this board's
+# board_fdt_blob_setup() for early SMEM-based memory detection *before* its
+# own setup_multi_dtb_fit() unwraps the FIT, so the SMEM parser searched the
+# still-wrapped FIT for a qcom,smem node and found none. Fixed by having
+# board_fdt_blob_setup() (board.c) do that same unwrap itself, early, via
+# locate_dtb_in_fit() - confirmed working on real SA535M EMMC TDP hardware
+# (memmap_source=SMEM in `printenv`, no panic).
+CONFIG_MULTI_DTB_FIT=y
+
 # The AMBOFIT FAT partition (mmc 0:23) holding boot.scr/amboseli-fit.itb is
 # not GPT-bootable, so unattended `bootflow scan -lb` (cmd/bootflow.c always
 # sets BOOTFLOWIF_ONLY_BOOTABLE) silently skips it in
