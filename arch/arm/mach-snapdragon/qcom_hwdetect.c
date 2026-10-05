@@ -28,17 +28,6 @@ DECLARE_GLOBAL_DATA_PTR;
 #define TCSR_MINOR_VERSION_MASK    0x000000ff
 #define TCSR_MINOR_VERSION_SHIFT   0
 
-/* DDR type enum */
-enum ddr_type {
-	DDRTYPE_256MB = 1,
-	DDRTYPE_512MB,
-	DDRTYPE_1024MB,
-	DDRTYPE_2048MB,
-	DDRTYPE_3072MB,
-	DDRTYPE_4096MB,
-	DDRTYPE_128MB,
-};
-
 /**
  * qcom_get_hwinfo_dev() - Look up the qcom,hwinfo device
  * @devp: Returns the qcom_hwinfo udevice
