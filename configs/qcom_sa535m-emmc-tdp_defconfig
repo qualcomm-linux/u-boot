@@ -29,11 +29,28 @@ CONFIG_WATCHDOG_AUTOSTART=y
 CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME="mmc"
 CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID=0
 
-# CONFIG_MULTI_DTB_FIT wraps U-Boot's own control DTB in a FIT container.
-# Enabling it alone used to panic on real hardware with "Couldn't find a
-# valid memory map!": fdtdec_setup() (lib/fdtdec.c) calls this board's
-# board_fdt_blob_setup() for early SMEM-based memory detection *before* its
-# own setup_multi_dtb_fit() unwraps the FIT, so the SMEM parser searched the
+# Select the kernel FIT's per-board config via the standard
+# board_fit_config_name_match() weak hook (overridden in
+# qcom_fit_board_match.c): boot.scr loads the FIT and calls plain
+# `bootm $addr` (no #config suffix), so fit_conf_get_node()
+# (boot/image-fit.c) falls into fit_find_config_node() (boot/common_fit.c),
+# which calls the hook once per /configurations node, matching each node's
+# existing qcom,board-id description string against live hardware
+# detection. Falls back to the FIT's own default config if none match. All
+# board-identity data lives in the .its file - adding a board never
+# requires a U-Boot change.
+# Not used for an unrelated reason: CONFIG_QCOM_FIT_MULTIDTB
+# (qcom_fit_multidtb.c's separate qclinux_fit.img/dtb_a multi-token match).
+# CONFIG_QCOM_FIT_MULTIDTB is not set
+CONFIG_QCOM_HWDETECT=y
+
+# CONFIG_MULTI_DTB_FIT is required for the board_fit_config_name_match()
+# path above (it gates fit_conf_get_node()'s conf_uname==NULL branch) and
+# also wraps U-Boot's own control DTB in a FIT container. Enabling it used
+# to panic on real hardware with "Couldn't find a valid memory map!":
+# fdtdec_setup() (lib/fdtdec.c) calls this board's board_fdt_blob_setup()
+# for early SMEM-based memory detection *before* its own
+# setup_multi_dtb_fit() unwraps the FIT, so the SMEM parser searched the
 # still-wrapped FIT for a qcom,smem node and found none. Fixed by having
 # board_fdt_blob_setup() (board.c) do that same unwrap itself, early, via
 # locate_dtb_in_fit() - confirmed working on real SA535M EMMC TDP hardware

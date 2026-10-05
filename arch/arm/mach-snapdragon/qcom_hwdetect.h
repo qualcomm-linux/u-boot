@@ -10,6 +10,17 @@
 
 #include <linux/types.h>
 
+/* DDR type enum */
+enum ddr_type {
+	DDRTYPE_256MB = 1,
+	DDRTYPE_512MB,
+	DDRTYPE_1024MB,
+	DDRTYPE_2048MB,
+	DDRTYPE_3072MB,
+	DDRTYPE_4096MB,
+	DDRTYPE_128MB,
+};
+
 /**
  * struct qcom_hw_params - Hardware parameters
  * @chip_id: SoC chip ID
