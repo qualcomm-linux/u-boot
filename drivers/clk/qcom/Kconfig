@@ -5,6 +5,11 @@ config CLK_QCOM
 	depends on CLK && DM_RESET && POWER_DOMAIN
 	def_bool n
 
+config SPL_CLK_QCOM
+	bool
+	depends on SPL_CLK && SPL_DM_RESET && SPL_POWER_DOMAIN
+	def_bool n
+
 menu "Qualcomm clock drivers"
 
 config CLK_QCOM_APQ8016
@@ -15,6 +20,14 @@ config CLK_QCOM_APQ8016
 	  on the Snapdragon APQ8016 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config SPL_CLK_QCOM_APQ8016
+	bool "Qualcomm APQ8016 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_APQ8016.
+	  See the help of CLK_QCOM_APQ8016 for details.
+
 config CLK_QCOM_APQ8096
 	bool "Qualcomm APQ8096 GCC"
 	select CLK_QCOM
@@ -22,6 +35,14 @@ config CLK_QCOM_APQ8096
 	  Say Y here to enable support for the Global Clock Controller
 	  on the Snapdragon APQ8096 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
+
+config SPL_CLK_QCOM_APQ8096
+	bool "Qualcomm APQ8096 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_APQ8096.
+	  See the help of CLK_QCOM_APQ8096 for details.
 
 config CLK_QCOM_IPQ4019
 	bool "Qualcomm IPQ4019 GCC"
@@ -31,6 +52,14 @@ config CLK_QCOM_IPQ4019
 	  on the Snapdragon IPQ4019 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config SPL_CLK_QCOM_IPQ4019
+	bool "Qualcomm IPQ4019 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_IPQ4019.
+	  See the help of CLK_QCOM_IPQ4019 for details.
+
 config CLK_QCOM_IPQ5210
 	bool "Qualcomm IPQ5210 GCC"
 	select CLK_QCOM
@@ -38,6 +67,14 @@ config CLK_QCOM_IPQ5210
 	  Say Y here to enable support for the Global Clock Controller
 	  on the Qualcomm IPQ5210 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
+
+config SPL_CLK_QCOM_IPQ5210
+	bool "Qualcomm IPQ5210 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_IPQ5210.
+	  See the help of CLK_QCOM_IPQ5210 for details.
 
 config CLK_QCOM_IPQ5424
 	bool "Qualcomm IPQ5424 GCC"
@@ -47,6 +84,14 @@ config CLK_QCOM_IPQ5424
 	  on the Qualcomm IPQ5424 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config SPL_CLK_QCOM_IPQ5424
+	bool "Qualcomm IPQ5424 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_IPQ5424.
+	  See the help of CLK_QCOM_IPQ5424 for details.
+
 config CLK_QCOM_IPQ9574
 	bool "Qualcomm IPQ9574 GCC"
 	select CLK_QCOM
@@ -54,6 +99,14 @@ config CLK_QCOM_IPQ9574
 	  Say Y here to enable support for the Global Clock Controller
 	  on the Snapdragon IPQ9574 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
+
+config SPL_CLK_QCOM_IPQ9574
+	bool "Qualcomm IPQ9574 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_IPQ9574.
+	  See the help of CLK_QCOM_IPQ9574 for details.
 
 config CLK_QCOM_MILOS
 	bool "Qualcomm Milos GCC"
@@ -63,6 +116,14 @@ config CLK_QCOM_MILOS
 	  on the Snapdragon Milos SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config SPL_CLK_QCOM_MILOS
+	bool "Qualcomm Milos GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_MILOS.
+	  See the help of CLK_QCOM_MILOS for details.
+
 config CLK_QCOM_NORD
 	bool "Qualcomm Nord GCC"
 	select CLK_QCOM
@@ -70,6 +131,14 @@ config CLK_QCOM_NORD
 	  Say Y here to enable support for the Global Clock Controller
 	  on the Snapdragon Nord SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
+
+config SPL_CLK_QCOM_NORD
+	bool "Qualcomm Nord GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_NORD.
+	  See the help of CLK_QCOM_NORD for details.
 
 config CLK_QCOM_NORD_NEGCC
 	bool "Qualcomm Nord NEGCC"
@@ -80,6 +149,14 @@ config CLK_QCOM_NORD_NEGCC
 	  UFS, USB, and QUPv3 clocks and resets exposed by the NEGCC
 	  hardware block.
 
+config SPL_CLK_QCOM_NORD_NEGCC
+	bool "Qualcomm Nord NEGCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_NORD_NEGCC.
+	  See the help of CLK_QCOM_NORD_NEGCC for details.
+
 config CLK_QCOM_NORD_SEGCC
 	bool "Qualcomm Nord SEGCC"
 	select CLK_QCOM
@@ -88,6 +165,14 @@ config CLK_QCOM_NORD_SEGCC
 	  Controller on the Snapdragon Nord SoC. This driver supports the
 	  EMAC and QUPv3 clocks and resets exposed by the SEGCC hardware
 	  block.
+
+config SPL_CLK_QCOM_NORD_SEGCC
+	bool "Qualcomm Nord SEGCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_NORD_SEGCC.
+	  See the help of CLK_QCOM_NORD_SEGCC for details.
 
 config CLK_QCOM_NORD_NWGCC
 	bool "Qualcomm Nord NWGCC"
@@ -98,6 +183,14 @@ config CLK_QCOM_NORD_NWGCC
 	  camera, display, EVA, video, and GPU clocks and resets exposed by
 	  the NWGCC hardware block.
 
+config SPL_CLK_QCOM_NORD_NWGCC
+	bool "Qualcomm Nord NWGCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_NORD_NWGCC.
+	  See the help of CLK_QCOM_NORD_NWGCC for details.
+
 config CLK_QCOM_NORD_TCSRCC
 	bool "Qualcomm Nord TCSRCC"
 	select CLK_QCOM
@@ -105,6 +198,14 @@ config CLK_QCOM_NORD_TCSRCC
 	  Say Y here to enable support for the TCSR Clock Controller on the
 	  Snapdragon Nord SoC. This driver supports the CLKREF enable gates
 	  exposed by the TCSRCC hardware block.
+
+config SPL_CLK_QCOM_NORD_TCSRCC
+	bool "Qualcomm Nord TCSRCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_NORD_TCSRCC.
+	  See the help of CLK_QCOM_NORD_TCSRCC for details.
 
 config CLK_QCOM_QCM2290
 	bool "Qualcomm QCM2290 GCC"
@@ -114,6 +215,14 @@ config CLK_QCOM_QCM2290
 	  on the Snapdragon QCM2290 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config SPL_CLK_QCOM_QCM2290
+	bool "Qualcomm QCM2290 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_QCM2290.
+	  See the help of CLK_QCOM_QCM2290 for details.
+
 config CLK_QCOM_QCS404
 	bool "Qualcomm QCS404 GCC"
 	select CLK_QCOM
@@ -121,6 +230,14 @@ config CLK_QCOM_QCS404
 	  Say Y here to enable support for the Global Clock Controller
 	  on the Snapdragon QCS404 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
+
+config SPL_CLK_QCOM_QCS404
+	bool "Qualcomm QCS404 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_QCS404.
+	  See the help of CLK_QCOM_QCS404 for details.
 
 config CLK_QCOM_QCS615
 	bool "Qualcomm QCS615 GCC"
@@ -130,6 +247,14 @@ config CLK_QCOM_QCS615
 	  on the Snapdragon QCS615 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config SPL_CLK_QCOM_QCS615
+	bool "Qualcomm QCS615 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_QCS615.
+	  See the help of CLK_QCOM_QCS615 for details.
+
 config CLK_QCOM_QCS8300
 	bool "Qualcomm QCS8300 GCC"
 	select CLK_QCOM
@@ -137,6 +262,14 @@ config CLK_QCOM_QCS8300
 	  Say Y here to enable support for the Global Clock Controller
 	  on the Snapdragon QCS8300 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
+
+config SPL_CLK_QCOM_QCS8300
+	bool "Qualcomm QCS8300 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_QCS8300.
+	  See the help of CLK_QCOM_QCS8300 for details.
 
 config CLK_QCOM_RPMH
 	bool "Qualcomm RPMh clock driver"
@@ -147,6 +280,13 @@ config CLK_QCOM_RPMH
 	  owned by the always-on subsystem; the driver only reports the fixed
 	  CXO rate (bi_tcxo_div2) and accepts no-op enable/set_rate requests.
 
+config SPL_CLK_QCOM_RPMH
+	bool "Qualcomm RPMh clock driver in SPL"
+	depends on SPL_CLK
+	help
+	  SPL variant of CLK_QCOM_RPMH.
+	  See the help of CLK_QCOM_RPMH for details.
+
 config CLK_QCOM_SA8775P
 	bool "Qualcomm SA8775 GCC"
 	select CLK_QCOM
@@ -156,6 +296,15 @@ config CLK_QCOM_SA8775P
 	  on the Snapdragon SA8775 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config SPL_CLK_QCOM_SA8775P
+	bool "Qualcomm SA8775 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	select SPL_CLK_QCOM_RPMH
+	help
+	  SPL variant of CLK_QCOM_SA8775P.
+	  See the help of CLK_QCOM_SA8775P for details.
+
 config CLK_QCOM_SDM845
 	bool "Qualcomm SDM845 GCC"
 	select CLK_QCOM
@@ -163,6 +312,14 @@ config CLK_QCOM_SDM845
 	  Say Y here to enable support for the Global Clock Controller
 	  on the Snapdragon 845 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
+
+config SPL_CLK_QCOM_SDM845
+	bool "Qualcomm SDM845 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_SDM845.
+	  See the help of CLK_QCOM_SDM845 for details.
 
 config CLK_QCOM_SHIKRA
 	bool "Qualcomm Shikra GCC"
@@ -172,6 +329,14 @@ config CLK_QCOM_SHIKRA
 	  on the Shikra SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config SPL_CLK_QCOM_SHIKRA
+	bool "Qualcomm Shikra GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_SHIKRA.
+	  See the help of CLK_QCOM_SHIKRA for details.
+
 config CLK_QCOM_SM6115
 	bool "Qualcomm SM6115 GCC"
 	select CLK_QCOM
@@ -179,6 +344,14 @@ config CLK_QCOM_SM6115
 	  Say Y here to enable support for the Global Clock Controller
 	  on the Snapdragon SM6115 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
+
+config SPL_CLK_QCOM_SM6115
+	bool "Qualcomm SM6115 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_SM6115.
+	  See the help of CLK_QCOM_SM6115 for details.
 
 config CLK_QCOM_SM6125
 	bool "Qualcomm SM6125 GCC"
@@ -188,12 +361,28 @@ config CLK_QCOM_SM6125
 	  on the Snapdragon SM6125 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config SPL_CLK_QCOM_SM6125
+	bool "Qualcomm SM6125 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_SM6125.
+	  See the help of CLK_QCOM_SM6125 for details.
+
 config CLK_QCOM_SM6350
 	bool "Qualcomm SM6350 GCC"
 	select CLK_QCOM
 	help
 	  Say Y here to enable support for the Global Clock Controller
 	  on the Snapdragon SM6350 SoC. This driver supports the clocks
+
+config SPL_CLK_QCOM_SM6350
+	bool "Qualcomm SM6350 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_SM6350.
+	  See the help of CLK_QCOM_SM6350 for details.
 
 config CLK_QCOM_SM7150
 	bool "Qualcomm SM7150 GCC"
@@ -203,6 +392,14 @@ config CLK_QCOM_SM7150
 	  on the Snapdragon SM7150 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config SPL_CLK_QCOM_SM7150
+	bool "Qualcomm SM7150 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_SM7150.
+	  See the help of CLK_QCOM_SM7150 for details.
+
 config CLK_QCOM_SM8150
 	bool "Qualcomm SM8150 GCC"
 	select CLK_QCOM
@@ -211,6 +408,14 @@ config CLK_QCOM_SM8150
 	  on the Snapdragon 8150 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config SPL_CLK_QCOM_SM8150
+	bool "Qualcomm SM8150 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_SM8150.
+	  See the help of CLK_QCOM_SM8150 for details.
+
 config CLK_QCOM_SM8250
 	bool "Qualcomm SM8250 GCC"
 	select CLK_QCOM
@@ -218,6 +423,14 @@ config CLK_QCOM_SM8250
 	  Say Y here to enable support for the Global Clock Controller
 	  on the Snapdragon SM8250 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
+
+config SPL_CLK_QCOM_SM8250
+	bool "Qualcomm SM8250 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_SM8250.
+	  See the help of CLK_QCOM_SM8250 for details.
 
 config CLK_QCOM_SM8550
 	bool "Qualcomm SM8550 GCC"
@@ -228,6 +441,15 @@ config CLK_QCOM_SM8550
 	  on the Snapdragon SM8550 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config SPL_CLK_QCOM_SM8550
+	bool "Qualcomm SM8550 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	select SPL_CLK_QCOM_RPMH
+	help
+	  SPL variant of CLK_QCOM_SM8550.
+	  See the help of CLK_QCOM_SM8550 for details.
+
 config CLK_QCOM_SM8650
 	bool "Qualcomm SM8650 GCC"
 	select CLK_QCOM
@@ -236,6 +458,15 @@ config CLK_QCOM_SM8650
 	  Say Y here to enable support for the Global Clock Controller
 	  on the Snapdragon SM8650 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
+
+config SPL_CLK_QCOM_SM8650
+	bool "Qualcomm SM8650 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	select SPL_CLK_QCOM_RPMH
+	help
+	  SPL variant of CLK_QCOM_SM8650.
+	  See the help of CLK_QCOM_SM8650 for details.
 
 config CLK_QCOM_SC7280
 	bool "Qualcomm SC7280 GCC"
@@ -246,6 +477,15 @@ config CLK_QCOM_SC7280
 	  on the Snapdragon SC7280 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config SPL_CLK_QCOM_SC7280
+	bool "Qualcomm SC7280 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	select SPL_CLK_QCOM_RPMH
+	help
+	  SPL variant of CLK_QCOM_SC7280.
+	  See the help of CLK_QCOM_SC7280 for details.
+
 config CLK_QCOM_X1E80100
 	bool "Qualcomm X1E80100 GCC"
 	select CLK_QCOM
@@ -253,6 +493,14 @@ config CLK_QCOM_X1E80100
 	  Say Y here to enable support for the Global Clock Controller
 	  on the Snapdragon X1E80100 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
+
+config SPL_CLK_QCOM_X1E80100
+	bool "Qualcomm X1E80100 GCC in SPL"
+	depends on SPL_CLK
+	select SPL_CLK_QCOM
+	help
+	  SPL variant of CLK_QCOM_X1E80100.
+	  See the help of CLK_QCOM_X1E80100 for details.
 
 endmenu
 
