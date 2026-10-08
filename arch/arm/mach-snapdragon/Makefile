@@ -7,6 +7,7 @@ obj-y += board.o dram.o
 obj-$(CONFIG_EFI_HAVE_CAPSULE_SUPPORT) += capsule_update.o
 obj-$(CONFIG_QCOM_FIT_MULTIDTB) += qcom_fit_multidtb.o
 obj-$(CONFIG_QCOM_HWDETECT) += qcom_hwdetect.o qcom_fit_board_match.o
+obj-$(CONFIG_QCOM_GENI_SE_PIL_UNLOCK) += qcom_scm_pil.o
 obj-$(CONFIG_OF_LIVE) += of_fixup.o
 obj-y += qcom_fixup_hypervisor.o
 endif

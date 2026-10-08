@@ -25,6 +25,11 @@ CONFIG_WATCHDOG_AUTOSTART=y
 # peripheral drivers already load firmware on-demand during their own probe.
 # CONFIG_QCOM_GENI_FW_LATE_INIT is not set
 
+# Some GENI SE wrappers on this SoC are shared with other execution
+# environments (e.g. the modem) and stay TrustZone XPU-locked unless
+# unlocked via PIL, same as EDK2/ABL's GpiDrvLib does.
+CONFIG_QCOM_GENI_SE_PIL_UNLOCK=y
+
 # sa535m-emmc-tdp has eMMC only, not UFS/SCSI - override qcom_defconfig settings
 CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME="mmc"
 CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID=0

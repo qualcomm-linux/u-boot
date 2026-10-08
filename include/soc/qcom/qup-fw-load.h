@@ -185,6 +185,9 @@ struct qup_mini_core_info {
 	u32 cfg_ram_count;
 };
 
+/* GUID of the GPT partition carrying the QUPV3 firmware ELF */
+#define QUPFW_PART_TYPE_GUID "21d1219f-2ed1-4ab4-930a-41a16ae75f7f"
+
 int qcom_geni_load_firmware(phys_addr_t qup_base, struct udevice *dev);
 
 #endif /* _LINUX_QCOM_QUP_FW_LOAD */

@@ -42,6 +42,7 @@
 
 #include "qcom-priv.h"
 #include "qcom_fit_multidtb.h"
+#include "qcom_scm_pil.h"
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -545,6 +546,18 @@ int board_late_init(void)
 	if (IS_ENABLED(CONFIG_QCOM_FIT_MULTIDTB)) {
 		if (qcom_fit_multidtb_setup())
 			log_debug("FIT multi-DTB selection not available or failed\n");
+	}
+
+	/*
+	 * Unlock the shared GENI SE's firmware RAM via TrustZone PIL before
+	 * any GENI peripheral driver probes it, mirroring EDK2/ABL's
+	 * GpiDrvLib. Runs here (not qcom_board_init()) because it needs the
+	 * qupfw partition on a probed block device, which board_init() runs
+	 * before (see initr_dm_devices/initr_mmc in common/board_r.c).
+	 */
+	if (IS_ENABLED(CONFIG_QCOM_GENI_SE_PIL_UNLOCK)) {
+		if (qcom_scm_pas_unlock(PAS_ID_GENI_SE))
+			log_warning("Failed to unlock shared GENI SE firmware\n");
 	}
 
 	return 0;
