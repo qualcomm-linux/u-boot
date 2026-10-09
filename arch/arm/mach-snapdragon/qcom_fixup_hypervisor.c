@@ -201,10 +201,10 @@ static int set_hyp_info(struct boot_param_list *pboot_param_list_ptr,
 	if (hyp_info_ptr->hyp_boot_info_magic != HYP_BOOTINFO_MAGIC)
 		return log_msg_ret("Invalid HYP MAGIC\n", -1);
 
-	printf("hypervisor_fixup: vm_type=%u num_dtbos=%u pil_enable=%u\n",
-	       hyp_info_ptr->primary_vm_info.vm_type,
-	       hyp_info_ptr->primary_vm_info.num_dtbos,
-	       hyp_info_ptr->pil_enable);
+	log_debug("hypervisor_fixup: vm_type=%u num_dtbos=%u pil_enable=%u\n",
+		  hyp_info_ptr->primary_vm_info.vm_type,
+		  hyp_info_ptr->primary_vm_info.num_dtbos,
+		  hyp_info_ptr->pil_enable);
 
 	num_dtbos = hyp_info_ptr->primary_vm_info.num_dtbos;
 	if (num_dtbos > HYP_MAX_NUM_DTBOS) {
@@ -221,10 +221,10 @@ static int set_hyp_info(struct boot_param_list *pboot_param_list_ptr,
 	for (idx = 0; idx < num_dtbos; idx++) {
 		dtbo_base_addr_ptr[idx] = hyp_info_ptr->primary_vm_info
 					  .info.linux_aarch64[idx].dtbo_base;
-		printf("hypervisor_fixup: dtbo[%u] base=0x%llx size=0x%llx\n",
-		       idx, dtbo_base_addr_ptr[idx],
-		       hyp_info_ptr->primary_vm_info
-		       .info.linux_aarch64[idx].dtbo_size);
+		log_debug("hypervisor_fixup: dtbo[%u] base=0x%llx size=0x%llx\n",
+			  idx, dtbo_base_addr_ptr[idx],
+			  hyp_info_ptr->primary_vm_info
+			  .info.linux_aarch64[idx].dtbo_size);
 	}
 
 	pboot_param_list_ptr->num_hyp_dtbos = num_dtbos;
@@ -280,8 +280,8 @@ static bool add_overlay_fdt(struct fdt_header *fdt_ptr, void *dtbo_base_addr_ptr
 
 	dtbo_size = fdt_totalsize(dtbo_base_addr_ptr);
 
-	printf("hypervisor_fixup: applying DTBO overlay, base=0x%p size=0x%x\n",
-	       dtbo_base_addr_ptr, dtbo_size);
+	log_debug("hypervisor_fixup: applying DTBO overlay, base=0x%p size=0x%x\n",
+		  dtbo_base_addr_ptr, dtbo_size);
 
 	/* Now that the real size is known, ensure the whole overlay is mapped */
 	map_unmapped_region((phys_addr_t)(uintptr_t)dtbo_base_addr_ptr, dtbo_size);
@@ -310,8 +310,8 @@ static bool add_overlay_fdt(struct fdt_header *fdt_ptr, void *dtbo_base_addr_ptr
 		return false;
 	}
 
-	printf("hypervisor_fixup: DTBO overlay applied successfully, new fdt size=0x%x\n",
-	       fdt_totalsize(fdt_ptr));
+	log_debug("hypervisor_fixup: DTBO overlay applied successfully, new fdt size=0x%x\n",
+		  fdt_totalsize(fdt_ptr));
 
 	return true;
 }
@@ -328,7 +328,8 @@ void hypervisor_fixup_handler(struct fdt_header *fdt_ptr)
 	struct boot_param_list boot_params_list;
 	int idx;
 	int status = check_and_set_vm_data(&boot_params_list);
-	printf("hypervisor_fixup_handler called ...!!!\n");
+
+	log_debug("hypervisor_fixup_handler called\n");
 	if (status != 0) {
 		log_err("Failed to update HypData!! Status:%d\n", status);
 		return;
@@ -352,8 +353,8 @@ void hypervisor_fixup_handler(struct fdt_header *fdt_ptr)
 			ok = add_overlay_fdt(fdt_ptr,
 					     (void *)boot_params_list
 					     .hyp_dtbo_base_addr[idx]);
-			printf("hypervisor_fixup: dtbo[%d] overlay %s\n",
-			       idx, ok ? "applied" : "failed");
+			log_debug("hypervisor_fixup: dtbo[%d] overlay %s\n",
+				  idx, ok ? "applied" : "failed");
 		}
 	}
 	log_debug("%s: Dtb apply overlay is success\n", __func__);

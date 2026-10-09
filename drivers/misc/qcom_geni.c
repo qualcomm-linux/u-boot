@@ -476,8 +476,6 @@ static int geni_se_of_to_plat(struct udevice *dev)
 	return 0;
 }
 
-#define QUPFW_PART_TYPE_GUID "21d1219f-2ed1-4ab4-930a-41a16ae75f7f"
-
 static int find_qupfw_part(struct udevice **blk_dev, struct disk_partition *part_info)
 {
 	struct blk_desc *desc;

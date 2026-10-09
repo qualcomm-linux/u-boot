@@ -153,6 +153,7 @@ static int do_bootflow_scan(struct cmd_tbl *cmdtp, int flag, int argc,
 	struct bootflow bflow;
 	bool all = false, boot = false, errors = false, no_global = false;
 	bool list = false, no_hunter = false, menu = false, text_mode = false;
+	bool no_bootable = false;
 	int num_valid = 0;
 	const char *label = NULL;
 	bool has_args;
@@ -174,6 +175,7 @@ static int do_bootflow_scan(struct cmd_tbl *cmdtp, int flag, int argc,
 			no_hunter = strchr(argv[1], 'H');
 			menu = strchr(argv[1], 'm');
 			text_mode = strchr(argv[1], 't');
+			no_bootable = strchr(argv[1], 'N');
 			argc--;
 			argv++;
 		}
@@ -191,7 +193,7 @@ static int do_bootflow_scan(struct cmd_tbl *cmdtp, int flag, int argc,
 
 	std->cur_bootflow = NULL;
 
-	flags = BOOTFLOWIF_ONLY_BOOTABLE;
+	flags = no_bootable ? 0 : BOOTFLOWIF_ONLY_BOOTABLE;
 	if (list)
 		flags |= BOOTFLOWIF_SHOW;
 	if (all)
@@ -200,6 +202,16 @@ static int do_bootflow_scan(struct cmd_tbl *cmdtp, int flag, int argc,
 		flags |= BOOTFLOWIF_SKIP_GLOBAL;
 	if (!no_hunter)
 		flags |= BOOTFLOWIF_HUNT;
+
+	/*
+	 * TEMPORARY WAR: unconditionally bypass the bootable-only partition
+	 * filter (not just when -N is passed), since no board using this
+	 * tree currently flags its boot partition bootable in its GPT.
+	 * Revert this line once the relevant boards' GPTs are updated to set
+	 * the bootable attribute on their boot partition, restoring -N as
+	 * the only way to skip this filter.
+	 */
+	flags &= ~BOOTFLOWIF_ONLY_BOOTABLE;
 
 	/*
 	 * If we have a device, just scan for bootflows attached to that device
@@ -611,7 +623,7 @@ static int do_bootflow_cmdline(struct cmd_tbl *cmdtp, int flag, int argc,
 
 U_BOOT_LONGHELP(bootflow,
 #ifdef CONFIG_CMD_BOOTFLOW_FULL
-	"scan [-abeGl] [bdev]  - scan for valid bootflows (-l list, -a all, -e errors, -b boot, -G no global)\n"
+	"scan [-abeGlN] [bdev]  - scan for valid bootflows (-l list, -a all, -e errors, -b boot, -G no global, -N no bootable-only filter)\n"
 	"bootflow list [-e]             - list scanned bootflows (-e errors)\n"
 	"bootflow select [<num>|<name>] - select a bootflow\n"
 	"bootflow info [-ds]            - show info on current bootflow (-d dump bootflow)\n"

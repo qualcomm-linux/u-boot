@@ -1,0 +1,3 @@
+echo "Amboseli: loading kernel FIT"
+load ${devtype} ${devnum}:${distro_bootpart} ${kernel_addr_r} ${prefix}amboseli-fit.itb
+bootm ${kernel_addr_r}

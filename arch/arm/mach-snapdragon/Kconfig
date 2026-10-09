@@ -65,6 +65,17 @@ config QCOM_FIT_MULTIDTB
 	  This allows U-Boot to select the appropriate device tree
 	  from a FIT image.
 
+config QCOM_GENI_SE_PIL_UNLOCK
+	bool "Unlock a shared GENI SE's firmware RAM via TrustZone PIL"
+	depends on QCOM_GENI
+	help
+	  Some GENI SE instances are marked qcom,shared-se (shared with
+	  another execution environment, e.g. the modem) and have their
+	  firmware RAM left XPU-locked by the boot ROM. Qualcomm's EDK2/ABL
+	  bootloader unlocks such instances via TrustZone PIL SCM calls
+	  before Linux boots; enable this to perform the same sequence from
+	  U-Boot on boards where it's needed.
+
 config QCOM_HWDETECT
 	bool "Qualcomm Hardware Detection"
 	depends on QCOM_SMEM
