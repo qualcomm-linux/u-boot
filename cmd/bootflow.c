@@ -204,6 +204,16 @@ static int do_bootflow_scan(struct cmd_tbl *cmdtp, int flag, int argc,
 		flags |= BOOTFLOWIF_HUNT;
 
 	/*
+	 * TEMPORARY WAR: unconditionally bypass the bootable-only partition
+	 * filter (not just when -N is passed), since no board using this
+	 * tree currently flags its boot partition bootable in its GPT.
+	 * Revert this line once the relevant boards' GPTs are updated to set
+	 * the bootable attribute on their boot partition, restoring -N as
+	 * the only way to skip this filter.
+	 */
+	flags &= ~BOOTFLOWIF_ONLY_BOOTABLE;
+
+	/*
 	 * If we have a device, just scan for bootflows attached to that device
 	 */
 	if (list) {
