@@ -100,3 +100,10 @@
 		spi-rx-bus-width = <1>;
 	};
 };
+
+&{/firmware} {
+	optee {
+		compatible = "linaro,optee-tz";
+		method = "smc";
+	};
+};
