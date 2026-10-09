@@ -149,6 +149,32 @@ enum {
 	IPQ_SPL_BOOTCFG_DEV_MAX
 };
 
+static int shikra_boot_device(int *mmc_seq)
+{
+	u8 boot_device_cfg;
+
+	boot_device_cfg =
+		(readl(IPQ_SPL_BOOTCFG_REG_ADDR) & IPQ_SPL_BOOTCFG_DEV_MASK) >>
+		IPQ_SPL_BOOTCFG_DEV_SHFT;
+
+	switch (boot_device_cfg) {
+	case IPQ_SPL_BOOTCFG_DEV_MMC:
+		if (mmc_seq)
+			*mmc_seq = 0;
+		return BOOT_DEVICE_MMC1;
+	case IPQ_SPL_BOOTCFG_DEV_SD_EMMC:
+		if (mmc_seq)
+			*mmc_seq = 1;
+		return BOOT_DEVICE_MMC2;
+	case IPQ_SPL_BOOTCFG_DEV_EDL:
+		return BOOT_DEVICE_USB;
+	case IPQ_SPL_BOOTCFG_DEV_NAND:
+		return BOOT_DEVICE_NAND;
+	default:
+		return -EINVAL;
+	}
+}
+
 #if defined(CONFIG_SPL_BUILD)
 /**
  * shikra_prepare_qup_clocks() - Enable QUP wrapper clocks.
@@ -197,23 +223,11 @@ static int shikra_prepare_boot_mmc(void)
 {
 	struct udevice *dev;
 	struct mmc *mmc;
-	u8 boot_device_cfg;
-	int seq, ret;
+	int boot_device, seq, ret;
 
-	boot_device_cfg =
-		(readl(IPQ_SPL_BOOTCFG_REG_ADDR) & IPQ_SPL_BOOTCFG_DEV_MASK) >>
-		IPQ_SPL_BOOTCFG_DEV_SHFT;
-
-	switch (boot_device_cfg) {
-	case IPQ_SPL_BOOTCFG_DEV_MMC:
-		seq = 0;
-		break;
-	case IPQ_SPL_BOOTCFG_DEV_SD_EMMC:
-		seq = 1;
-		break;
-	default:
-		return 0;
-	}
+	boot_device = shikra_boot_device(&seq);
+	if (boot_device != BOOT_DEVICE_MMC1 && boot_device != BOOT_DEVICE_MMC2)
+		return -ENODEV;
 
 	ret = uclass_get_device_by_seq(UCLASS_MMC, seq, &dev);
 	if (ret)
@@ -222,6 +236,13 @@ static int shikra_prepare_boot_mmc(void)
 	mmc = mmc_get_mmc_dev(dev);
 	if (!mmc)
 		return -ENODEV;
+
+	/*
+	 * SPL cannot resolve the SD card-detect GPIO from its live device tree.
+	 * PBL selected this device as the boot source, so poll it for the card.
+	 */
+	if (boot_device == BOOT_DEVICE_MMC2)
+		((struct mmc_config *)mmc->cfg)->host_caps |= MMC_CAP_NEEDS_POLL;
 
 	return mmc_init(mmc);
 }
@@ -404,12 +425,23 @@ int spl_mmc_boot_partition(const u32 boot_device)
 {
 	struct blk_desc *desc;
 	struct disk_partition info;
-	int partition;
+	int mmc_seq, partition;
 
 	if (!IS_ENABLED(CONFIG_MMC))
 		return -ENOSYS;
 
-	desc = blk_get_devnum_by_uclass_id(UCLASS_MMC, 0);
+	switch (boot_device) {
+	case BOOT_DEVICE_MMC1:
+		mmc_seq = 0;
+		break;
+	case BOOT_DEVICE_MMC2:
+		mmc_seq = 1;
+		break;
+	default:
+		return -ENODEV;
+	}
+
+	desc = blk_get_devnum_by_uclass_id(UCLASS_MMC, mmc_seq);
 	if (!desc)
 		return -ENODEV;
 
@@ -428,33 +460,28 @@ int spl_mmc_boot_partition(const u32 boot_device)
  */
 u32 spl_boot_device(void)
 {
-	u8 boot_device_cfg =
-	(readl(IPQ_SPL_BOOTCFG_REG_ADDR) & IPQ_SPL_BOOTCFG_DEV_MASK) >>
-	IPQ_SPL_BOOTCFG_DEV_SHFT;
-	u32 boot_device_smem;
+	int boot_device;
 
-	switch (boot_device_cfg) {
-	case IPQ_SPL_BOOTCFG_DEV_MMC:
-		boot_device_smem = BOOT_DEVICE_MMC1;
-		printf("Selected boot device: MMC\n");
-		break;
-	case IPQ_SPL_BOOTCFG_DEV_SD_EMMC:
-		boot_device_smem = BOOT_DEVICE_MMC2;
-		printf("Selected boot device: SD MMC\n");
-		break;
-	case IPQ_SPL_BOOTCFG_DEV_EDL:
-		boot_device_smem = BOOT_DEVICE_USB;
-		printf("Selected boot device: SPI-NAND\n");
-		break;
-	case IPQ_SPL_BOOTCFG_DEV_NAND:
-		boot_device_smem = BOOT_DEVICE_NAND;
-		printf("Selected boot device: SPI-NAND\n");
-		break;
-	default:
-		pr_err("Invalid boot device configured: %d\n",
-		       boot_device_cfg);
-		return -EINVAL;
+	boot_device = shikra_boot_device(NULL);
+	if (boot_device < 0) {
+		pr_err("Invalid boot device configured\n");
+		return boot_device;
 	}
 
-	return boot_device_smem;
+	switch (boot_device) {
+	case BOOT_DEVICE_MMC1:
+		printf("Selected boot device: MMC\n");
+		break;
+	case BOOT_DEVICE_MMC2:
+		printf("Selected boot device: SD MMC\n");
+		break;
+	case BOOT_DEVICE_USB:
+		printf("Selected boot device: USB\n");
+		break;
+	case BOOT_DEVICE_NAND:
+		printf("Selected boot device: NAND\n");
+		break;
+	}
+
+	return boot_device;
 }
