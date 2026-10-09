@@ -15,6 +15,7 @@
 
 	aliases {
 		mmc0 = &sdhc_1;
+		mmc1 = &sdhc_2;
 		serial0 = &uart0;
 	};
 
@@ -36,5 +37,18 @@
 	no-sdio;
 	no-sd;
 
+	status = "okay";
+};
+
+&sdhc_2 {
+	resets = <&gcc GCC_SDCC2_BCR>;
+	vmmc-supply = <&pm4125_l22>;
+	vqmmc-supply = <&pm4125_l18>;
+	max-frequency = <100000000>;
+	no-sdio;
+	no-mmc;
+	pinctrl-0 = <&sdc2_default &sdc2_card_det_n>;
+	pinctrl-1 = <&sdc2_sleep &sdc2_card_det_n>;
+	pinctrl-names = "default", "sleep";
 	status = "okay";
 };
