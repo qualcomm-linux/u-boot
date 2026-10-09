@@ -6,9 +6,15 @@
  */
 
 #include <asm/sections.h>
+#include <blk.h>
+#include <dm/uclass.h>
 #include <hang.h>
 #include <init.h>
+#include <linux/kernel.h>
 #include <mach/qclib.h>
+#include <mach/spl.h>
+#include <memalign.h>
+#include <part.h>
 #include <spl.h>
 #include <soc/qcom/smem.h>
 
@@ -31,8 +37,160 @@ void __weak qcom_spl_soc_shrm_reset(void)
 {
 }
 
+const struct qcom_cdt_desc * __weak qcom_spl_soc_cdt_desc(void)
+{
+	return NULL;
+}
+
 void __weak qcom_spl_soc_rpm_reset(void)
 {
+}
+
+/**
+ * qcom_spl_get_boot_blk_desc() - Resolve the boot media's block device.
+ * @descp:	Set to the resolved block device on success.
+ *
+ * Maps the already-detected boot device (spl_boot_device() - a direct
+ * bootcfg register read, not a scan) to the uclass/devnum pair that
+ * owns it, mirroring the same mapping common/spl/spl_mmc.c and
+ * common/spl/spl_ufs.c use to pick a block device for a given
+ * BOOT_DEVICE_* value. This makes the CDT partition lookup generic
+ * across whatever boot medium the board actually used, instead of
+ * assuming eMMC.
+ *
+ * Return: 0 on success, or a negative error code if the boot device is
+ * unsupported or its block device can't be found.
+ */
+static int qcom_spl_get_boot_blk_desc(struct blk_desc **descp)
+{
+	enum uclass_id uclass_id;
+	int devnum;
+
+	switch (spl_boot_device()) {
+	case BOOT_DEVICE_MMC1:
+		uclass_id = UCLASS_MMC;
+		devnum = 0;
+		break;
+	case BOOT_DEVICE_MMC2:
+	case BOOT_DEVICE_MMC2_2:
+		uclass_id = UCLASS_MMC;
+		devnum = 1;
+		break;
+	case BOOT_DEVICE_UFS:
+		uclass_id = UCLASS_SCSI;
+		devnum = 0;
+		break;
+	default:
+		return -ENOSYS;
+	}
+
+	*descp = blk_get_devnum_by_uclass_id(uclass_id, devnum);
+	if (!*descp)
+		return -ENODEV;
+
+	return 0;
+}
+
+/**
+ * qcom_spl_cdt_load() - Load the CDT from the boot medium into IMEM.
+ *
+ * On the open boot flow, SPL - not SBL1 - owns storage access at this
+ * stage, so SPL (not QCLIB) must read the CDT off the boot medium and
+ * stage it in IMEM at the address described by qcom_spl_soc_cdt_desc(),
+ * then hand it to QCLIB via the interface table (added by the board's
+ * qcom_spl_soc_qclib_override(), only if this load succeeded).
+ *
+ * Generic across SoCs and boot media: qcom_spl_get_boot_blk_desc()
+ * resolves the block device for whichever flash spl_boot_device()
+ * reports (a single register read, not a device scan). The CDT GPT
+ * partition is then located with a direct lookup -
+ * part_get_info_by_name() first, falling back to
+ * part_get_info_by_type_guid() if a fallback GUID was provided -
+ * rather than manually iterating every partition number. On eMMC,
+ * where the CDT may be provisioned on a boot hardware partition rather
+ * than the default user-data area, the configured hwpart is selected
+ * first and restored afterwards; this is a no-op on interfaces without
+ * hardware partitions (UFS, ...).
+ *
+ * This is entirely optional and non-fatal to the caller: if no board
+ * descriptor is provided, the boot device isn't supported, its block
+ * device isn't found, the CDT partition isn't found by either name or
+ * GUID, or the read fails, this returns a negative error code and
+ * QCLIB simply falls back to its own default platform info.
+ *
+ * Return: 0 on success, or a negative error code on failure.
+ */
+int qcom_spl_cdt_load(void)
+{
+	const struct qcom_cdt_desc *desc_cfg;
+	struct blk_desc *desc;
+	struct disk_partition info;
+	lbaint_t blocks;
+	bool is_mmc;
+	int ret;
+
+	desc_cfg = qcom_spl_soc_cdt_desc();
+	if (!desc_cfg)
+		return -ENOSYS;
+
+	ret = qcom_spl_get_boot_blk_desc(&desc);
+	if (ret) {
+		pr_debug("CDT: boot device not supported for CDT staging (%d)\n",
+			 ret);
+		return ret;
+	}
+
+	is_mmc = desc->uclass_id == UCLASS_MMC;
+	if (is_mmc) {
+	    ret = blk_dselect_hwpart(desc, desc_cfg->mmc_hwpart);
+		if (ret)
+			return ret;
+	}
+	part_init(desc);
+
+	ret = part_get_info_by_name(desc, desc_cfg->part_name, &info);
+	if (ret < 0 && desc_cfg->part_type_guid &&
+	    CONFIG_IS_ENABLED(PARTITION_TYPE_GUID))
+		ret = part_get_info_by_type_guid(desc, desc_cfg->part_type_guid,
+						 &info);
+	if (ret < 0) {
+		pr_err("CDT: partition not found (%d)\n", ret);
+		goto restore_hwpart;
+	}
+
+	blocks = DIV_ROUND_UP(desc_cfg->size, info.blksz);
+	if (blocks > info.size)
+		blocks = info.size;
+
+	{
+		ALLOC_CACHE_ALIGN_BUFFER(u8, blk_buf, blocks * info.blksz);
+
+		if (blk_dread(desc, info.start, blocks, blk_buf) != blocks) {
+			pr_err("CDT: failed to read partition '%s'\n",
+			       desc_cfg->part_name);
+			ret = -EIO;
+			goto restore_hwpart;
+		}
+
+		memcpy((void *)desc_cfg->addr, blk_buf,
+			       min_t(u32, desc_cfg->size, blocks * info.blksz));
+	}
+
+	ret = 0;
+
+restore_hwpart:
+	/* Restore the default (user data) hardware partition, if eMMC. */
+	if (is_mmc) {
+	    int rc = blk_dselect_hwpart(desc, 0);
+	    if (rc) {
+	        if (!ret)
+	            ret = rc;
+	        return ret;
+	    }
+	}
+	part_init(desc);
+
+	return ret;
 }
 
 #if IS_ENABLED(CONFIG_SPL_SMEM)

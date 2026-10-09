@@ -12,6 +12,7 @@
 #include <dm/uclass.h>
 #include <init.h>
 #include <linux/err.h>
+#include <linux/kernel.h>
 #include <linux/sizes.h>
 #include <linux/string.h>
 #include <malloc.h>
@@ -139,6 +140,44 @@ int arm_reserve_mmu(void)
 #define SHIKRA_RPM_STAGING_SIZE			0x1363c
 
 #define QCOM_SPL_FIT_IMG_PARTITION	"uefi_a"
+
+/*
+ * CDT (Config/Chip Data Table). On the open boot flow, SPL - not SBL1 -
+ * owns storage access at this stage, so SPL (not QCLIB) must read the CDT
+ * off the boot medium and stage it in IMEM, then hand it to QCLIB via the
+ * interface table, the same way the other fixed-address blobs below are
+ * passed. Without this, QCLIB has no real CDT input and falls back to
+ * default platform/board info in SMEM, which U-Boot proper's DTB
+ * selection (qcom_hwdetect.c / qcom_fit_multidtb.c) then relies on.
+ *
+ * The "cdt" partition is located generically (qcom_spl_cdt_load(), shared
+ * with other Snapdragon SoCs in arch/arm/mach-snapdragon/qclib.c), driven
+ * by the board data below.
+ *
+ * Staged right after ddr_training_data (0x0c368000 + 0x8000), still
+ * within the BOOTIMEM region SPL/QCLIB execute from, and clear of every
+ * other fixed IMEM entry registered in qcom_spl_soc_qclib_override()
+ * below. CDT content observed on this board is well under 128 bytes
+ * (e.g. "CDT Version:3,Platform ID:34,...").
+ *
+ * On eMMC, the "cdt" partition is not necessarily provisioned in the
+ * default user-data hardware partition (hwpart 0) - on Shikra, it lives
+ * on the eMMC boot hardware partition (hwpart 1, i.e. what "mmc dev <n> 1"
+ * switches to).
+ */
+#define SHIKRA_CDT_PARTITION		"cdt"
+#define SHIKRA_CDT_PART_TYPE_GUID	"a19f205f-ccd8-4b6d-8f1e-2d9bc24cffb1"
+#define SHIKRA_CDT_ADDR			0x0c370000
+#define SHIKRA_CDT_SIZE			0x200
+#define SHIKRA_CDT_EMMC_HWPART		1
+
+static const struct qcom_cdt_desc shikra_cdt_desc = {
+	.part_name	= SHIKRA_CDT_PARTITION,
+	.part_type_guid	= SHIKRA_CDT_PART_TYPE_GUID,
+	.addr		= SHIKRA_CDT_ADDR,
+	.size		= SHIKRA_CDT_SIZE,
+	.mmc_hwpart	= SHIKRA_CDT_EMMC_HWPART,
+};
 
 enum {
 	IPQ_SPL_BOOTCFG_DEV_MMC = 0x0,
@@ -313,6 +352,15 @@ fail:
 		reset_cpu();
 }
 #endif
+
+/* Set by qcom_spl_cdt_load() on success; read by qcom_spl_soc_qclib_override(). */
+static bool g_cdt_loaded __section(".data") = 0;
+
+const struct qcom_cdt_desc *qcom_spl_soc_cdt_desc(void)
+{
+	return &shikra_cdt_desc;
+}
+
 int qcom_spl_soc_qclib_override(struct interface_table *table,
 				const void *fit, int images_node)
 {
@@ -346,7 +394,19 @@ int qcom_spl_soc_qclib_override(struct interface_table *table,
 	if (ret)
 		return ret;
 
-	return qclib_add_iftbl_entry(table, SHIKRA_DDR_SR_EXIT, 0, 0);
+	ret = qclib_add_iftbl_entry(table, SHIKRA_DDR_SR_EXIT, 0, 0);
+	if (ret)
+		return ret;
+
+	if (g_cdt_loaded) {
+		ret = qclib_add_iftbl_entry(table, SHIKRA_CDT_PARTITION,
+					    shikra_cdt_desc.addr,
+					    shikra_cdt_desc.size);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
 }
 
 void qcom_spl_soc_shrm_reset(void)
@@ -362,6 +422,8 @@ void qcom_spl_soc_shrm_reset(void)
 int qcom_spl_soc_pre_qclib_routine(void)
 {
 	qcom_spl_soc_shrm_reset();
+
+	g_cdt_loaded = !qcom_spl_cdt_load();
 
 	return 0;
 }
