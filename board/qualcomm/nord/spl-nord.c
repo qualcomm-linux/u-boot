@@ -5,6 +5,7 @@
 
 #include <asm/sections.h>
 #include <asm/io.h>
+#include <atf_common.h>
 #include <cpu_func.h>
 #include <hang.h>
 #include <init.h>
@@ -88,6 +89,32 @@ u32 spl_boot_device(void)
 	default:
 		printf("Unsupported boot option: %u\n", boot_option);
 		return BOOT_DEVICE_NONE;
+	}
+}
+
+/**
+ * qcom_spl_board_fixup_bl31_params_v2() - Apply Nord's BL31 parameter fixups.
+ * @bl_params: BL31 parameters populated by the Snapdragon implementation.
+ *
+ * The Snapdragon implementation handles the QCSDI-to-BL31 handoff. Nord
+ * additionally passes the optional TOC FDT address to BL32.
+ */
+void qcom_spl_board_fixup_bl31_params_v2(struct bl_params *bl_params)
+{
+	struct bl_params_node *node;
+	u64 toc_fdt_address;
+
+	toc_fdt_address = qcom_spl_get_toc_fdt_address();
+
+	for_each_bl_params_node(bl_params, node) {
+		if (node->image_id == ATF_BL32_IMAGE_ID) {
+			if (toc_fdt_address == 0)
+				pr_debug("TOC FDT address not set, BL32 will get arg0=0\n");
+
+			node->ep_info->args.arg0 = toc_fdt_address;
+			printf("TOC FDT address passed to BL32 (arg0): 0x%lx\n",
+			       (unsigned long)node->ep_info->args.arg0);
+		}
 	}
 }
 
