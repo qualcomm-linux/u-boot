@@ -240,6 +240,7 @@ static int load_simple_fit(struct spl_load_info *info, ulong fit_offset,
 	int ret;
 
 	log_debug("starting\n");
+	printf("Loading image: %s\n", fit_get_name(fit, node, NULL));
 	if (CONFIG_IS_ENABLED(BOOTMETH_VBE) &&
 	    xpl_get_phase(info) != IH_PHASE_NONE) {
 		enum image_phase_t phase;
