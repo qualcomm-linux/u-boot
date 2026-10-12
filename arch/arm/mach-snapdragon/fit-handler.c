@@ -7,8 +7,11 @@
 #include <log.h>
 #include <spl.h>
 #include <linux/err.h>
+#include <linux/libfdt.h>
 #include <mach/qclib.h>
 #include <mach/spl.h>
+
+#define TOC_FDT				"toc_fdt"
 
 /**
  * qcom_spl_get_fit_img_entry_point() - Get entry point from FIT image node.
@@ -127,5 +130,59 @@ struct bl_params *bl2_plat_get_bl31_params_v2(uintptr_t bl32_entry,
 		}
 	}
 
+	qcom_spl_board_fixup_bl31_params_v2(bl_params);
+
 	return bl_params;
+}
+
+/**
+ * qcom_spl_board_fixup_bl31_params_v2() - Apply optional board-specific fixups.
+ * @bl_params: BL31 parameters populated by the Snapdragon implementation.
+ *
+ * Boards can override this weak hook to add platform-specific parameter
+ * handoffs without replacing the common Snapdragon QCSDI fixup.
+ */
+__weak void qcom_spl_board_fixup_bl31_params_v2(struct bl_params *bl_params)
+{
+	(void)bl_params;
+}
+
+/**
+ * qcom_spl_get_toc_fdt_address() - Get the optional TOC FDT load address.
+ *
+ * The generic FIT loader has already loaded the node by the time ATF
+ * parameters are prepared. Look up its load address so it can be passed to
+ * BL32 through arg0.
+ *
+ * Return: TOC FDT load address, or 0 if the optional node is unavailable.
+ */
+u64 qcom_spl_get_toc_fdt_address(void)
+{
+	u64 toc_fdt_address = 0;
+	const void *fit = (const void *)CONFIG_SPL_LOAD_FIT_ADDRESS;
+	int images_node;
+	int toc_fdt_node;
+	int ret;
+
+	images_node = fdt_subnode_offset(fit, 0, "images");
+	if (images_node < 0) {
+		pr_err("Failed to find images node in FIT\n");
+		return 0;
+	}
+
+	toc_fdt_node = fdt_subnode_offset(fit, images_node, TOC_FDT);
+	if (toc_fdt_node < 0) {
+		pr_debug("No '%s' node in FIT, BL32 will get arg0=0\n", TOC_FDT);
+		return 0;
+	}
+
+	ret = qcom_spl_get_fit_img_entry_point((void *)fit, toc_fdt_node,
+					       &toc_fdt_address);
+	if (ret)
+		pr_warn("Failed to get '%s' load address (%d)\n", TOC_FDT, ret);
+	else
+		printf("TOC FDT address: 0x%lx\n",
+		       (unsigned long)toc_fdt_address);
+
+	return toc_fdt_address;
 }
