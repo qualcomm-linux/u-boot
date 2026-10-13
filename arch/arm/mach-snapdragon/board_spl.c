@@ -6,8 +6,11 @@
  */
 
 #include <asm/sections.h>
+#include <blk.h>
+#include <dm/uclass.h>
 #include <hang.h>
 #include <init.h>
+#include <linux/err.h>
 #include <mach/qclib.h>
 #include <spl.h>
 #include <soc/qcom/smem.h>
@@ -33,6 +36,45 @@ void __weak qcom_spl_soc_shrm_reset(void)
 
 void __weak qcom_spl_soc_rpm_reset(void)
 {
+}
+
+/**
+ * qcom_spl_get_boot_blk_desc() - Get the boot medium's block device.
+ * @descp: Set to the resolved block device on success.
+ *
+ * Maps the already-detected boot device to the uclass/devnum pair.
+ *
+ * Return: 0 on success, or a negative error code if the boot device is
+ * unsupported or its block device cannot be found.
+ */
+int qcom_spl_get_boot_blk_desc(struct blk_desc **descp)
+{
+	enum uclass_id uclass_id;
+	int devnum;
+
+	switch (spl_boot_device()) {
+	case BOOT_DEVICE_MMC1:
+		uclass_id = UCLASS_MMC;
+		devnum = 0;
+		break;
+	case BOOT_DEVICE_MMC2:
+	case BOOT_DEVICE_MMC2_2:
+		uclass_id = UCLASS_MMC;
+		devnum = 1;
+		break;
+	case BOOT_DEVICE_UFS:
+		uclass_id = UCLASS_SCSI;
+		devnum = 0;
+		break;
+	default:
+		return -ENOSYS;
+	}
+
+	*descp = blk_get_devnum_by_uclass_id(uclass_id, devnum);
+	if (!*descp)
+		return -ENODEV;
+
+	return 0;
 }
 
 #if IS_ENABLED(CONFIG_SPL_SMEM)
