@@ -63,6 +63,75 @@ config QCOM_HWDETECT
 	  Hardware parameter detection from SMEM and TCSR for
 	  DTB selection and other platform subsystems.
 
+config QCOM_SPL_CDT_SUPPORTED
+	bool "Enable CDT support in SPL"
+	depends on SPL
+	help
+	  Enable support for reading the CDT off the boot medium during
+	  SPL and staging it in IMEM, so that QCLIB can pick it up via
+	  the interface table.
+
+if QCOM_SPL_CDT_SUPPORTED
+
+choice
+	prompt "CDT partition lookup method"
+	default QCOM_SPL_CDT_USE_PARTITION_NAME
+
+config QCOM_SPL_CDT_USE_PARTITION_NAME
+	bool "Look up the CDT partition by GPT partition name"
+	depends on SPL_PARTITIONS
+	help
+	  Locate the CDT partition on the boot medium by its GPT partition
+	  name (CONFIG_QCOM_SPL_CDT_PARTITION_NAME).
+
+config QCOM_SPL_CDT_USE_PARTITION_GUID
+	bool "Look up the CDT partition by GPT partition type GUID"
+	depends on SPL_PARTITION_TYPE_GUID
+	help
+	  Locate the CDT partition on the boot medium by its GPT partition
+	  type GUID (CONFIG_QCOM_SPL_CDT_PARTITION_GUID).
+
+endchoice
+
+config QCOM_SPL_CDT_PARTITION_NAME
+	string "CDT GPT partition name"
+	depends on QCOM_SPL_CDT_USE_PARTITION_NAME
+	default "cdt"
+	help
+	  Name of the GPT partition on the boot medium containing the CDT
+	  (Config/Chip Data Table) data.
+
+config QCOM_SPL_CDT_PARTITION_GUID
+	string "CDT GPT partition type GUID"
+	depends on QCOM_SPL_CDT_USE_PARTITION_GUID
+	help
+	  GPT partition type GUID identifying the CDT (Config/Chip Data
+	  Table) partition on the boot medium.
+
+config QCOM_SPL_CDT_MMC_PARTITION_NUM
+	int "eMMC hardware partition containing the CDT partition"
+	default 0
+	help
+	  eMMC hardware partition number (0 = default user data area) on
+	  which the CDT GPT partition is located. Ignored for non-MMC boot
+	  media.
+
+config QCOM_SPL_BOOTIMEM_CDT_BASE
+	hex "IMEM address to stage the CDT contents at"
+	help
+	  Address within BOOTIMEM where the CDT contents read from the boot
+	  medium are staged, to be consumed by QCLIB via the interface
+	  table.
+
+config QCOM_SPL_BOOTITEM_CDT_SIZE
+	hex "Maximum number of bytes to stage for the CDT"
+	default 0x200
+	help
+	  Maximum number of bytes read from the CDT partition and staged at
+	  CONFIG_QCOM_SPL_BOOTIMEM_CDT_BASE.
+
+endif # QCOM_SPL_CDT_SUPPORTED
+
 choice
 	prompt "Qualcomm boot0.h workaround"
 	optional

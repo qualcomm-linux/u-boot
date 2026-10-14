@@ -6,9 +6,15 @@
  */
 
 #include <asm/sections.h>
+#include <blk.h>
+#include <dm/uclass.h>
 #include <hang.h>
 #include <init.h>
+#include <linux/kernel.h>
 #include <mach/qclib.h>
+#include <mach/spl.h>
+#include <memalign.h>
+#include <part.h>
 #include <spl.h>
 #include <soc/qcom/smem.h>
 
@@ -34,6 +40,98 @@ void __weak qcom_spl_soc_shrm_reset(void)
 void __weak qcom_spl_soc_rpm_reset(void)
 {
 }
+
+#if IS_ENABLED(CONFIG_QCOM_SPL_CDT_SUPPORTED)
+/**
+ * qcom_spl_cdt_load() - Load the CDT from the boot medium.
+ *
+ * This functions read the boot medium for CDT information which gets saved
+ * in IMEM location.
+ *
+ * Return: 0 on success, or a negative error code on failure.
+ */
+int qcom_spl_cdt_load(void)
+{
+	struct blk_desc *desc;
+	struct disk_partition info;
+	lbaint_t blocks;
+	bool is_mmc;
+	int ret;
+
+	ret = qcom_spl_get_boot_blk_desc(&desc);
+	if (ret) {
+		pr_debug("CDT: boot device not supported for CDT staging (%d)\n",
+			 ret);
+		return ret;
+	}
+
+	is_mmc = desc->uclass_id == UCLASS_MMC;
+	if (is_mmc) {
+		ret = blk_dselect_hwpart(desc, CONFIG_QCOM_SPL_CDT_MMC_PARTITION_NUM);
+		if (ret)
+			return ret;
+
+		part_init(desc);
+	}
+
+#if defined(CONFIG_QCOM_SPL_CDT_USE_PARTITION_NAME)
+	ret = part_get_info_by_name(desc, CONFIG_QCOM_SPL_CDT_PARTITION_NAME, &info);
+#elif defined(CONFIG_QCOM_SPL_CDT_USE_PARTITION_GUID)
+	ret = part_get_info_by_type_guid(desc, CONFIG_QCOM_SPL_CDT_PARTITION_GUID,
+					 &info);
+#else
+	ret = -EINVAL;
+#endif
+	if (ret < 0) {
+		pr_err("CDT: partition not found (%d)\n", ret);
+		goto restore_hwpart;
+	}
+
+	blocks = DIV_ROUND_UP(CONFIG_QCOM_SPL_BOOTITEM_CDT_SIZE, info.blksz);
+	if (blocks > info.size)
+		blocks = info.size;
+
+	{
+		ALLOC_CACHE_ALIGN_BUFFER(u8, blk_buf, blocks * info.blksz);
+		size_t read_size = blocks * info.blksz;
+		size_t copy_size = min_t(size_t, CONFIG_QCOM_SPL_BOOTITEM_CDT_SIZE,
+					 read_size);
+
+		if (blk_dread(desc, info.start, blocks, blk_buf) != blocks) {
+			pr_err("CDT: failed to read CDT partition\n");
+			ret = -EIO;
+			goto restore_hwpart;
+		}
+
+		memset((u8 *)CONFIG_QCOM_SPL_BOOTIMEM_CDT_BASE, 0,
+		       CONFIG_QCOM_SPL_BOOTITEM_CDT_SIZE);
+		memcpy((u8 *)CONFIG_QCOM_SPL_BOOTIMEM_CDT_BASE, blk_buf, copy_size);
+	}
+
+	ret = 0;
+
+restore_hwpart:
+	/* Restore the default (user data) hardware partition, if eMMC. */
+	if (is_mmc) {
+		int rc = blk_dselect_hwpart(desc, 0);
+
+		if (rc) {
+			if (!ret)
+				ret = rc;
+			return ret;
+		}
+
+		part_init(desc);
+	}
+
+	return ret;
+}
+#else
+int qcom_spl_cdt_load(void)
+{
+	return -ENOSYS;
+}
+#endif /* IS_ENABLED(CONFIG_QCOM_SPL_CDT_SUPPORTED) */
 
 #if IS_ENABLED(CONFIG_SPL_SMEM)
 /**
