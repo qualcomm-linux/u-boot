@@ -528,6 +528,14 @@ struct ufs_hba_ops {
 				   enum ufs_notify_change_status);
 	int (*phy_initialization)(struct ufs_hba *hba);
 	int (*device_reset)(struct ufs_hba *hba);
+	/*
+	 * Locate the MCQ Operation/Runtime register banks, which the
+	 * UFSHCI spec leaves implementation-defined. Required for
+	 * hba->mcq_enabled to ever be set - a controller that advertises
+	 * MASK_MCQ_SUPPORT but has no vendor glue implementing this falls
+	 * back to SDB.
+	 */
+	int (*mcq_config_resource)(struct ufs_hba *hba);
 };
 
 enum ufshcd_quirks {
@@ -719,6 +727,24 @@ struct ufs_hba {
 	struct ufs_pwr_mode_info max_pwr_info;
 
 	struct ufs_dev_cmd dev_cmd;
+
+	/*
+	 * MCQ (Multi-Circular Queue) support. Only ever used for queue
+	 * index 0 - this driver has at most one command outstanding at a
+	 * time, so a single small SQ/CQ ring is all that's needed.
+	 */
+	bool mcq_enabled;
+	void __iomem *mcq_cfg_base;	/* queue-0 SQ/CQ config bank */
+	void __iomem *mcq_sqd_base;	/* SQ doorbell/runtime registers */
+	void __iomem *mcq_sqis_base;	/* SQ interrupt-status registers */
+	void __iomem *mcq_cqd_base;	/* CQ doorbell/runtime registers */
+	void __iomem *mcq_cqis_base;	/* CQ interrupt-status registers */
+	struct utp_transfer_req_desc *mcq_sqe_base;
+	struct cq_entry *mcq_cqe_base;
+	u32 mcq_depth;
+	u32 mcq_sq_tail_slot;
+	u32 mcq_cq_head_slot;
+	u8 mcq_last_ocs;
 };
 
 static inline int ufshcd_ops_init(struct ufs_hba *hba)
@@ -770,6 +796,14 @@ static inline int ufshcd_vops_device_reset(struct ufs_hba *hba)
 		return hba->ops->device_reset(hba);
 
 	return 0;
+}
+
+static inline int ufshcd_vops_mcq_config_resource(struct ufs_hba *hba)
+{
+	if (hba->ops && hba->ops->mcq_config_resource)
+		return hba->ops->mcq_config_resource(hba);
+
+	return -EOPNOTSUPP;
 }
 
 /* Interrupt disable masks */
