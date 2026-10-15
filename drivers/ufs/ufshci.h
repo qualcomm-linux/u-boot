@@ -119,6 +119,19 @@ enum {
 };
 
 #define SQ_ICU_ERR_CODE_MASK		GENMASK(7, 4)
+
+/* MCQ per-queue config bank: REG_SQATTR/REG_CQATTR/etc. above repeat every
+ * MCQ_QCFG_SIZE bytes, one entry per hardware queue.
+ */
+#define MCQ_QCFG_SIZE		0x40
+
+/* SQATTR/CQATTR bit fields */
+#define MCQ_QUEUE_ENABLE	BIT(31)
+#define MCQ_QUEUE_ID_OFFSET	16
+#define MCQ_ENTRY_SIZE_IN_DWORD	8
+
+/* REG_UFS_MCQ_CFG - MCQ global config 380h */
+#define MCQ_CFG_MAC_MASK	GENMASK(16, 8)
 #define UFS_MASK(mask, offset)		((mask) << (offset))
 
 /* UFS Version 08h */
@@ -443,6 +456,42 @@ struct utp_upiu_header {
 	__be32 dword_0;
 	__be32 dword_1;
 	__be32 dword_2;
+};
+
+/**
+ * struct cq_entry - MCQ Completion Queue Entry
+ * @command_desc_base_addr: UCD base address DW 0-1
+ * @response_upiu_length: response UPIU length DW-2
+ * @response_upiu_offset: response UPIU offset DW-2
+ * @prd_table_length: Physical region descriptor length DW-3
+ * @prd_table_offset: Physical region descriptor offset DW-3
+ * @overall_status: Overall Command Status DW-4
+ */
+struct cq_entry {
+	/* DW 0-1 */
+	__le64 command_desc_base_addr;
+
+	/* DW 2 */
+	__le16  response_upiu_length;
+	__le16  response_upiu_offset;
+
+	/* DW 3 */
+	__le16  prd_table_length;
+	__le16  prd_table_offset;
+
+	/* DW 4 */
+	u8 overall_status;
+	u8 extended_error_code;
+	__le16 reserved_1;
+
+	/* DW 5 */
+	u8 task_tag;
+	u8 lun;
+	u8 iid_ext_iid;
+	u8 reserved_2;
+
+	/* DW 6-7 */
+	__le32 reserved_3[2];
 };
 
 /*

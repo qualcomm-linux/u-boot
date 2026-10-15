@@ -29,6 +29,7 @@
 #include <linux/dma-mapping.h>
 
 #include "ufs.h"
+#include "ufshcd-mcq.h"
 
 #define UFSHCD_ENABLE_INTRS	(UTP_TRANSFER_REQ_COMPL |\
 				 UTP_TASK_REQ_COMPL |\
@@ -416,13 +417,21 @@ static inline int ufshcd_get_lists_status(u32 reg)
  * ufshcd_enable_run_stop_reg - Enable run-stop registers,
  *			When run-stop registers are set to 1, it indicates the
  *			host controller that it can process the requests
+ *
+ *			Task management is independent of SDB vs. MCQ
+ *			selection (MCQ only replaces the transfer-request
+ *			path), so its run-stop bit is always set. The
+ *			transfer-request run-stop bit only applies to the
+ *			legacy SDB path - in MCQ mode the queue itself was
+ *			already enabled by ufshcd_mcq_make_operational().
  */
 static void ufshcd_enable_run_stop_reg(struct ufs_hba *hba)
 {
 	ufshcd_writel(hba, UTP_TASK_REQ_LIST_RUN_STOP_BIT,
 		      REG_UTP_TASK_REQ_LIST_RUN_STOP);
-	ufshcd_writel(hba, UTP_TRANSFER_REQ_LIST_RUN_STOP_BIT,
-		      REG_UTP_TRANSFER_REQ_LIST_RUN_STOP);
+	if (!hba->mcq_enabled)
+		ufshcd_writel(hba, UTP_TRANSFER_REQ_LIST_RUN_STOP_BIT,
+			      REG_UTP_TRANSFER_REQ_LIST_RUN_STOP);
 }
 
 /**
@@ -466,15 +475,26 @@ static int ufshcd_make_hba_operational(struct ufs_hba *hba)
 	/* Disable interrupt aggregation */
 	ufshcd_disable_intr_aggr(hba);
 
-	/* Configure UTRL and UTMRL base address registers */
-	ufshcd_writel(hba, lower_32_bits(dev_phys_to_bus(hba->dev, (phys_addr_t)(uintptr_t)(hba->utrdl))),
-		      REG_UTP_TRANSFER_REQ_LIST_BASE_L);
-	ufshcd_writel(hba, upper_32_bits(dev_phys_to_bus(hba->dev, (phys_addr_t)(uintptr_t)(hba->utrdl))),
-		      REG_UTP_TRANSFER_REQ_LIST_BASE_H);
+	/*
+	 * Configure UTMRL base address register. Task management is
+	 * independent of SDB vs. MCQ selection, so this is always needed.
+	 */
 	ufshcd_writel(hba, lower_32_bits(dev_phys_to_bus(hba->dev, (phys_addr_t)(uintptr_t)(hba->utmrdl))),
 		      REG_UTP_TASK_REQ_LIST_BASE_L);
 	ufshcd_writel(hba, upper_32_bits(dev_phys_to_bus(hba->dev, (phys_addr_t)(uintptr_t)(hba->utmrdl))),
 		      REG_UTP_TASK_REQ_LIST_BASE_H);
+
+	if (hba->mcq_enabled) {
+		err = ufshcd_mcq_make_operational(hba);
+		if (err)
+			goto out;
+	} else {
+		/* Configure UTRL base address register */
+		ufshcd_writel(hba, lower_32_bits(dev_phys_to_bus(hba->dev, (phys_addr_t)(uintptr_t)(hba->utrdl))),
+			      REG_UTP_TRANSFER_REQ_LIST_BASE_L);
+		ufshcd_writel(hba, upper_32_bits(dev_phys_to_bus(hba->dev, (phys_addr_t)(uintptr_t)(hba->utrdl))),
+			      REG_UTP_TRANSFER_REQ_LIST_BASE_H);
+	}
 
 	/*
 	 * Make sure base address and interrupt setup are updated before
@@ -709,6 +729,13 @@ static int ufshcd_memory_alloc(struct ufs_hba *hba)
 		return -ENOMEM;
 	}
 
+	if (hba->mcq_enabled) {
+		int err = ufshcd_mcq_alloc(hba);
+
+		if (err)
+			return err;
+	}
+
 	return 0;
 }
 
@@ -757,7 +784,7 @@ static inline u8 ufshcd_get_upmcrs(struct ufs_hba *hba)
  *
  * Flush cache in aligned address..address+size range.
  */
-static void ufshcd_cache_flush(void *addr, unsigned long size)
+void ufshcd_cache_flush(void *addr, unsigned long size)
 {
 	uintptr_t start_addr = (uintptr_t)addr & ~(ARCH_DMA_MINALIGN - 1);
 	uintptr_t end_addr = ALIGN((uintptr_t)addr + size, ARCH_DMA_MINALIGN);
@@ -770,7 +797,7 @@ static void ufshcd_cache_flush(void *addr, unsigned long size)
  *
  * Invalidate cache in aligned address..address+size range.
  */
-static void ufshcd_cache_invalidate(void *addr, unsigned long size)
+void ufshcd_cache_invalidate(void *addr, unsigned long size)
 {
 	uintptr_t start_addr = (uintptr_t)addr & ~(ARCH_DMA_MINALIGN - 1);
 	uintptr_t end_addr = ALIGN((uintptr_t)addr + size, ARCH_DMA_MINALIGN);
@@ -915,6 +942,9 @@ static int ufshcd_send_command(struct ufs_hba *hba, unsigned int task_tag)
 	u32 intr_status;
 	u32 enabled_intr_status;
 
+	if (hba->mcq_enabled)
+		return ufshcd_mcq_send_command(hba, task_tag);
+
 	ufshcd_writel(hba, 1 << task_tag, REG_UTP_TRANSFER_REQ_DOOR_BELL);
 
 	/* Make sure doorbell reg is updated before reading interrupt status */
@@ -963,6 +993,9 @@ static inline int ufshcd_get_req_rsp(struct utp_upiu_rsp *ucd_rsp_ptr)
 static inline int ufshcd_get_tr_ocs(struct ufs_hba *hba)
 {
 	struct utp_transfer_req_desc *req_desc = hba->utrdl;
+
+	if (hba->mcq_enabled)
+		return ufshcd_mcq_get_tr_ocs(hba);
 
 	ufshcd_cache_invalidate(req_desc, sizeof(*req_desc));
 
@@ -2215,6 +2248,26 @@ int ufshcd_probe(struct udevice *ufs_dev, struct ufs_hba_ops *hba_ops)
 	hba->capabilities = ufshcd_readl(hba, REG_CONTROLLER_CAPABILITIES);
 	if (hba->quirks & UFSHCD_QUIRK_BROKEN_64BIT_ADDRESS)
 		hba->capabilities &= ~MASK_64_ADDRESSING_SUPPORT;
+
+	/*
+	 * MCQ is opt-in via "enable-mcq", not opt-out: a board must ask
+	 * for it explicitly even on an MCQ-capable controller, so that
+	 * existing boards/DTs that have never exercised the MCQ path
+	 * don't change behavior out from under them just by rebuilding
+	 * with this driver.
+	 */
+	bool mcq_capable = ufshcd_mcq_capable(hba);
+	bool mcq_enabled_dt = dev_read_bool(ufs_dev, "enable-mcq");
+
+	hba->mcq_enabled = mcq_capable && mcq_enabled_dt;
+
+	if (mcq_capable && !mcq_enabled_dt)
+		dev_warn(hba->dev,
+			 "ufs: MCQ supported but not enabled via devicetree, using SDB\n");
+	else
+		dev_warn(hba->dev, "ufs: MCQ %ssupported, using %s\n",
+			 hba->mcq_enabled ? "" : "not ",
+			 hba->mcq_enabled ? "MCQ" : "SDB");
 
 	/* Get UFS version supported by the controller */
 	hba->version = ufshcd_get_ufs_version(hba);

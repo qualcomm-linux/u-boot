@@ -107,6 +107,32 @@ enum {
 #define UNIPRO_CORE_CLK_FREQ_201_5_MHZ         202
 #define UNIPRO_CORE_CLK_FREQ_403_MHZ           403
 
+/*
+ * MCQ configuration for this UFSHCI 4.0 controller generation. QCFGPTR is a
+ * read-only HW capability (REG_MCQCAP bits 23:16) but Qualcomm's own Linux
+ * driver hardcodes it rather than reading it at runtime, since it's fixed
+ * for this controller generation; the value below is confirmed against this
+ * board's own device tree (ufs_mem_hc's "std"/"mcq" reg-names split is
+ * exactly 224 * 0x200 apart).
+ */
+#define UFS_QCOM_MCQCAP_QCFGPTR		224	/* 0xE0 */
+#define UFS_QCOM_MCQ_CONFIG_OFFSET	(UFS_QCOM_MCQCAP_QCFGPTR * 0x200)	/* 0x1C000 */
+
+/* Operation/Runtime (doorbell + interrupt-status) bank offsets within the
+ * MCQ region - vendor-specific placement, not fixed by the UFSHCI spec.
+ */
+#define UFS_QCOM_MCQ_SQD_OFFSET		0x5000
+#define UFS_QCOM_MCQ_SQIS_OFFSET	0x5040
+#define UFS_QCOM_MCQ_CQD_OFFSET		0x5080
+#define UFS_QCOM_MCQ_CQIS_OFFSET	0x50C0
+#define UFS_QCOM_MCQ_STRIDE		0x100
+
+/* Calculated address offsets, relative to mmio_base */
+#define UFS_QCOM_SQD_ADDR_OFFSET	(UFS_QCOM_MCQ_CONFIG_OFFSET + UFS_QCOM_MCQ_SQD_OFFSET)
+#define UFS_QCOM_SQIS_ADDR_OFFSET	(UFS_QCOM_MCQ_CONFIG_OFFSET + UFS_QCOM_MCQ_SQIS_OFFSET)
+#define UFS_QCOM_CQD_ADDR_OFFSET	(UFS_QCOM_MCQ_CONFIG_OFFSET + UFS_QCOM_MCQ_CQD_OFFSET)
+#define UFS_QCOM_CQIS_ADDR_OFFSET	(UFS_QCOM_MCQ_CONFIG_OFFSET + UFS_QCOM_MCQ_CQIS_OFFSET)
+
 static inline void
 ufs_qcom_get_controller_revision(struct ufs_hba *hba,
 				 u8 *major, u16 *minor, u16 *step)

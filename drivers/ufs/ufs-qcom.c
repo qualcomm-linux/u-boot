@@ -635,12 +635,31 @@ static int ufs_qcom_device_reset(struct ufs_hba *hba)
 	return 0;
 }
 
+/**
+ * ufs_qcom_mcq_config_resource() - locate the MCQ Operation/Runtime
+ * register banks for this controller generation.
+ *
+ * The UFSHCI spec leaves the physical placement of these banks
+ * implementation-defined; see UFS_QCOM_MCQ_CONFIG_OFFSET in ufs-qcom.h.
+ */
+static int ufs_qcom_mcq_config_resource(struct ufs_hba *hba)
+{
+	hba->mcq_cfg_base = hba->mmio_base + UFS_QCOM_MCQ_CONFIG_OFFSET;
+	hba->mcq_sqd_base = hba->mmio_base + UFS_QCOM_SQD_ADDR_OFFSET;
+	hba->mcq_sqis_base = hba->mmio_base + UFS_QCOM_SQIS_ADDR_OFFSET;
+	hba->mcq_cqd_base = hba->mmio_base + UFS_QCOM_CQD_ADDR_OFFSET;
+	hba->mcq_cqis_base = hba->mmio_base + UFS_QCOM_CQIS_ADDR_OFFSET;
+
+	return 0;
+}
+
 static struct ufs_hba_ops ufs_qcom_hba_ops = {
 	.init			= ufs_qcom_init,
 	.get_max_pwr_mode	= ufs_get_max_pwr_mode,
 	.hce_enable_notify	= ufs_qcom_hce_enable_notify,
 	.link_startup_notify	= ufs_qcom_link_startup_notify,
 	.device_reset		= ufs_qcom_device_reset,
+	.mcq_config_resource	= ufs_qcom_mcq_config_resource,
 };
 
 static int ufs_qcom_probe(struct udevice *dev)
