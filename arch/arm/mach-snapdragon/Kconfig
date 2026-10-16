@@ -146,6 +146,72 @@ config QCOM_SPL_BOOTIMEM_CDT_SIZE
 
 endif # QCOM_SPL_CDT_SUPPORTED
 
+config QCOM_DDR_TRAINING_SUPPORTED
+	bool "Enable DDR training data save/restore support in SPL"
+	depends on SPL
+	help
+	  Enable support for saving and restoring QCLIB's DDR training data
+	  to/from a dedicated storage partition during the SPL boot flow.
+
+if QCOM_DDR_TRAINING_SUPPORTED
+
+choice
+	prompt "DDR training partition lookup method"
+	default QCOM_DDR_TRAINING_USE_PARTITION_NAME
+	help
+	  Locate the DDR training-data partition on the boot medium either
+	  using partition name or partition type GUID.
+
+config QCOM_DDR_TRAINING_USE_PARTITION_NAME
+	bool "Look up the DDR training partition by GPT partition name"
+	depends on SPL_PARTITIONS
+	help
+	  Locate the DDR training-data partition on the boot medium by its
+	  GPT partition name (CONFIG_QCOM_DDR_TRAINING_PARTITION_NAME).
+
+config QCOM_DDR_TRAINING_USE_PARTITION_GUID
+	bool "Look up the DDR training partition by GPT partition type GUID"
+	depends on SPL_PARTITION_TYPE_GUID
+	help
+	  Locate the DDR training-data partition on the boot medium by its
+	  GPT partition type GUID (CONFIG_QCOM_DDR_TRAINING_PARTITION_GUID).
+
+endchoice
+
+config QCOM_DDR_TRAINING_PARTITION_NAME
+	string "DDR training GPT partition name"
+	depends on QCOM_DDR_TRAINING_USE_PARTITION_NAME
+	default "ddr"
+	help
+	  Name of the GPT partition on the boot medium used to persist DDR
+	  training data across boots. Locates the DDR training-data
+	  partition by GPT partition name.
+
+config QCOM_DDR_TRAINING_PARTITION_GUID
+	string "DDR training GPT partition type GUID"
+	depends on QCOM_DDR_TRAINING_USE_PARTITION_GUID
+	help
+	  GPT partition type GUID identifying the partition on the boot
+	  medium used to persist DDR training data across boots. Locates
+	  the DDR training-data partition by GPT partition type GUID.
+
+config QCOM_SPL_BOOTIMEM_DDR_TRAINING_BASE
+	hex "IMEM address to stage DDR training data at"
+	default 0x0c368000
+	help
+	  Address within BOOTIMEM where DDR training data is staged, to be
+	  consumed/produced by QCLIB via the interface table.
+
+config QCOM_SPL_BOOTIMEM_DDR_TRAINING_SIZE
+	hex "Maximum number of bytes to stage for DDR training data"
+	default 0x8000
+	help
+	  Maximum number of bytes read from/written to the DDR training
+	  partition and staged at
+	  CONFIG_QCOM_SPL_BOOTIMEM_DDR_TRAINING_BASE.
+
+endif # QCOM_DDR_TRAINING_SUPPORTED
+
 choice
 	prompt "Qualcomm boot0.h workaround"
 	optional
