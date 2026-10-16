@@ -119,8 +119,6 @@ int arm_reserve_mmu(void)
 #define SHIKRA_DCB_LP5			"dcb_lp5"
 #define SHIKRA_ECC			"ecc"
 
-#define SHIKRA_DDR_TRAINING_DATA_ADDR	0x0c368000
-#define SHIKRA_DDR_TRAINING_DATA_SIZE	0x8000
 #define SHIKRA_PMIC_COCOS_SIZE		0xbc00
 #define SHIKRA_PMIC_WAILUA_SIZE	0x6000
 #define SHIKRA_DCB_LP4_SIZE		0x4800
@@ -337,11 +335,14 @@ int qcom_spl_soc_qclib_override(struct interface_table *table,
 			return ret;
 	}
 
-	ret = qclib_add_iftbl_entry(table, SHIKRA_DDR_TRAINING_DATA,
-				    SHIKRA_DDR_TRAINING_DATA_ADDR,
-				    SHIKRA_DDR_TRAINING_DATA_SIZE);
-	if (ret)
-		return ret;
+	if (IS_ENABLED(CONFIG_QCOM_DDR_TRAINING_SUPPORTED)) {
+		ret = qclib_add_iftbl_entry(table, SHIKRA_DDR_TRAINING_DATA,
+					    CONFIG_QCOM_SPL_BOOTIMEM_DDR_TRAINING_BASE,
+					    CONFIG_QCOM_SPL_BOOTIMEM_DDR_TRAINING_SIZE);
+		if (ret)
+			return ret;
+	}
+
 	ret = qclib_add_iftbl_entry(table, SHIKRA_DDR_INFORMATION, 0, 0);
 	if (ret)
 		return ret;
@@ -363,7 +364,11 @@ int qcom_spl_soc_pre_qclib_routine(void)
 {
 	qcom_spl_soc_shrm_reset();
 
+	if (IS_ENABLED(CONFIG_QCOM_DDR_TRAINING_SUPPORTED))
+		return qcom_spl_ddr_training_load();
+
 	return 0;
+
 }
 
 void qcom_spl_soc_rpm_reset(void)
@@ -397,6 +402,22 @@ int qcom_spl_soc_post_qclib_routine(struct interface_table *table)
 		return ret;
 
 	qclib_set_ddr_sr_exit_address(entry.address);
+
+	if (IS_ENABLED(CONFIG_QCOM_DDR_TRAINING_SUPPORTED)) {
+		ret = qcom_spl_get_iftbl_entry_by_name(table, SHIKRA_DDR_TRAINING_DATA,
+						       &entry);
+		if (ret)
+			return ret;
+
+		if (entry.attributes & QCLIB_ATTR_SAVE_TO_STORAGE) {
+			ret = qcom_spl_ddr_training_save(entry.address, entry.size);
+			if (ret) {
+				pr_err("DDR training: save failed (%d)\n", ret);
+				return ret;
+			}
+		}
+	}
+
 	return 0;
 }
 

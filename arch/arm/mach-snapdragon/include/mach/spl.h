@@ -9,5 +9,7 @@
 void qcom_spl_malloc_init_f(void);
 int qcom_spl_loader_pre_ddr(u8 boot_device);
 void qcom_spl_error_handler(void *arg);
+int qcom_spl_ddr_training_load(void);
+int qcom_spl_ddr_training_save(u64 address, u32 size);
 
 #endif /* __SPL_H__ */
