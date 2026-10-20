@@ -1,0 +1,83 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ */
+
+/ {
+	/*
+	 * Without this node, qcom_hwdetect_get_params() (arch/arm/mach-
+	 * snapdragon/qcom_hwdetect.c) fails with -ENODEV looking up the
+	 * "qcom,hwinfo" device, which board_fit_config_name_match()
+	 * (qcom_fit_board_match.c) treats as an unconditional rejection of
+	 * every /configurations node in the kernel FIT - so the kernel FIT
+	 * falls back to its first-listed config instead of this board's
+	 * actual conf-* node, and boots with the wrong DTB. Same node,
+	 * same imem/tcsr offsets, as sa535m-emmc-tdp-u-boot.dtsi (same
+	 * echo SoC).
+	 */
+	qcom_hwinfo: qcom-hwinfo {
+		compatible = "qcom,hwinfo";
+
+		imem = <&sram>;
+		imem-boot-cookie-offset = <0x0>;
+
+		tcsr = <&tcsr>;
+		tcsr-hw-version-offset = <0x8000>;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+};
+
+/*
+ * serial0 (aliases -> &uart1, serial@a84000) is left "disabled" in
+ * echo.dtsi since it is the debug/BT UART shared by many boards; this
+ * board uses it as its console, so enable it here rather than in the
+ * shared dtsi. Confirmed as the root cause of "No serial driver found"
+ * via a device-probe trace during initial bring-up.
+ */
+&uart1 {
+	status = "okay";
+};
+
+/*
+ * qupv3_id_0 (the GENI QUP wrapper housing serial@a84000/uart1) carries
+ * status = "ok" in echo.dtsi instead of the DT-spec "okay". U-Boot's
+ * of_device_is_available() only accepts the exact string "okay", so this
+ * wrapper -- and every child SE beneath it, including uart1 -- was never
+ * bound by dm_scan_fdt_node(), regardless of the children's own status.
+ * This is the actual root cause of "No serial driver found"; the &uart1
+ * fix above was necessary but not sufficient on its own. Same issue
+ * documented in sa535m-emmc-tdp-u-boot.dtsi for the same shared node.
+ */
+&qupv3_id_0 {
+	status = "okay";
+};
+
+&sdhc_1 {
+	/*
+	 * qcom,echo-rpmh-clk has no U-Boot driver; strip the xo clock
+	 * so clk_get_bulk() does not fail resolving an unimplemented
+	 * clock provider. Same issue documented in
+	 * sa535m-emmc-tdp-u-boot.dtsi for the same shared node.
+	 */
+	clocks = <&gcc GCC_SDCC1_AHB_CLK>,
+		 <&gcc GCC_SDCC1_APPS_CLK>;
+	clock-names = "iface", "core";
+
+	/delete-property/ mmc-ddr-1_8v;
+	/delete-property/ mmc-hs400-1_8v;
+	/delete-property/ mmc-hs400-enhanced-strobe;
+};
+
+/*
+ * wdog (qcom,wdt@17410000) carries status = "ok" in echo.dtsi instead of the
+ * DT-spec "okay". U-Boot's of_device_is_available() accepts only the exact
+ * string "okay", so the node was never bound by dm_scan_fdt_node() and
+ * CONFIG_WDT_QCOM + CONFIG_WATCHDOG_AUTOSTART had no device to start. Same
+ * trap as qupv3_id_0 above.
+ */
+&wdog {
+       status = "okay";
+};

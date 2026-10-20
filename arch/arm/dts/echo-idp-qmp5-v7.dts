@@ -1,0 +1,74 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ */
+
+/dts-v1/;
+
+#include "echo.dtsi"
+#include "echo-eth-qmp5.dtsi"
+/* echo-qcn9625.dtsi temporarily removed to isolate a hang during boot -
+ * see qmp5_emmc_board_support_implementation.md for the debug trace that
+ * pointed at pinn_tre0_vreg's enable-GPIO (gpio81, defined by that file).
+ */
+
+/ {
+	model = "Qualcomm Technologies, Inc. ECHO IDP QMP5 V7";
+
+	compatible = "qcom,echo-idp",
+			"qcom,echo", "qcom,idp";
+	qcom,msm-id = <701 0x10000>, <787 0x10000>;
+	qcom,board-id = <0x2070022 0x0>;
+};
+
+&pcie2 {
+	status = "disabled";
+};
+
+&pcie0_phy {
+	status = "okay";
+};
+
+&pcie0_port0 {
+	status = "okay";
+};
+
+&pcie1_phy {
+	status = "okay";
+};
+
+&pcie1_port0 {
+	status = "okay";
+};
+
+/*
+ * Linux applies this as a separate DTB overlay (echo-emmc.dtso) at image-
+ * build time; U-Boot's CONFIG_DEFAULT_DEVICE_TREE builds exactly one .dts,
+ * so the overlay's body is inlined here unchanged, following the same
+ * precedent already used by sa535m-emmc-tdp.dts.
+ */
+&sdhc_1 {
+	non-removable;
+	no-sd;
+	no-sdio;
+
+	vmmc-supply = <&ldo_3p3_0_g0>;
+	vqmmc-supply = <&vreg_l6b_1p8>;
+
+	status = "okay";
+
+	pinctrl-0 = <&sdc1_clk>, <&sdc1_cmd>, <&sdc1_data>, <&sdc1_rclk>;
+	pinctrl-1 = <&sdc1_clk_sleep>, <&sdc1_cmd_sleep>, <&sdc1_data_sleep>,
+			<&sdc1_rclk_sleep>;
+	pinctrl-names = "default", "sleep";
+
+	bus-width = <8>;
+	supports-cqe;
+	operating-points-v2 = <&sdhc1_opp_table>;
+
+	mmc-ddr-1_8v;
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
+	mmc-hs400-enhanced-strobe;
+	qcom,ice = <&ice_mmc>;
+};

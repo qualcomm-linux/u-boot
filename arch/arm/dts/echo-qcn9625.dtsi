@@ -1,0 +1,324 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ */
+
+&reserved_memory {
+	#address-cells = <2>;
+	#size-cells = <2>;
+	ranges;
+
+	qcn9625_0_mem: qcn9625_0_mem {
+		compatible = "shared-dma-pool";
+		alloc-ranges = <0x0 0x00000000 0x0 0xffffffff>;
+		reusable;
+		alignment = <0x0 0x400000>;
+		size = <0x0 0x3400000>;
+	};
+
+	qcn9625_1_mem: qcn9625_1_mem {
+		compatible = "shared-dma-pool";
+		alloc-ranges = <0x0 0x00000000 0x0 0xffffffff>;
+		reusable;
+		alignment = <0x0 0x400000>;
+		size = <0x0 0x3400000>;
+	};
+
+	qcn9625_2_mem: qcn9625_2_mem {
+		compatible = "shared-dma-pool";
+		alloc-ranges = <0x0 0x00000000 0x0 0xffffffff>;
+		reusable;
+		alignment = <0x0 0x400000>;
+		size = <0x0 0x3400000>;
+	};
+
+	mlo_global_mem0: mlo_global_mem_0 {
+		compatible = "shared-dma-pool";
+		alloc-ranges = <0x0 0x00000000 0x0 0xffffffff>;
+		reusable;
+		alignment = <0x0 0x400000>;
+		size = <0x0 0x1400000>;
+	};
+
+	wifi0_iova_range: wifi0_iova_partition {
+		iommu-addresses =
+			<&ath12k_wifi0 0x0 0x0 0x0 0x0 0x70000000>,
+			<&ath12k_wifi0 0x0 0x0 0xBEC00000 0x0 0x41400000>;
+	};
+
+	wifi1_iova_range: wifi1_iova_partition {
+		iommu-addresses =
+			<&ath12k_wifi1 0x0 0x0 0x0 0x0 0x70000000>,
+			<&ath12k_wifi1 0x0 0x0 0xBEC00000 0x0 0x41400000>;
+	};
+
+	wifi2_iova_range: wifi2_iova_partition {
+		iommu-addresses =
+			<&ath12k_wifi2 0x0 0x0 0x0 0x0 0x70000000>,
+			<&ath12k_wifi2 0x0 0x0 0xBEC00000 0x0 0x41400000>;
+	};
+};
+
+/*
+ * The QCN9625 Wi-Fi SoC is the PCIe endpoint, requires a specific
+ * bring-up order to guarantee clean enumeration:
+ *
+ *  1. Power rails stable
+ *     The 3.3 V supply (pinn_tre0/1_vreg, gpio81/80) must be stable
+ *     before any reset signal is released.
+ *
+ *  2. Deassert RESIN (gpio77, gpio76 and gpio40 active-low)
+ *     RESIN is a warm-reset input to the QCN9625. It resets the SoC
+ *     internal subsystems independently of the PCIe link. Modelled as
+ *     child regulator-fixed nodes (resin_tre0/1/2_vreg) whose vin-supply
+ *     is the parent 3.3 V rail; the regulator framework sequences the
+ *     GPIO deassert after the parent rail is stable.
+ *
+ *  3. Assert PERST# (gpio44, gpio122, gpio125 active-low)
+ *     Standard PCIe fundamental reset. Both signals are held for at
+ *     least 100 ms to allow the QCN9625 to stabilise.
+ */
+
+&soc {
+	pinn_tre0_vreg: pinn_tre0_vreg {
+		compatible = "regulator-fixed";
+		regulator-name = "pinn_tre0_vreg";
+		gpio = <&tlmm 81 GPIO_ACTIVE_HIGH>;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		startup-delay-us = <200000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	pinn_tre1_vreg: pinn_tre1_vreg {
+		compatible = "regulator-fixed";
+		regulator-name = "pinn_tre1_vreg";
+		gpio = <&tlmm 80 GPIO_ACTIVE_HIGH>;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		startup-delay-us = <10000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	resin_tre0_vreg: resin_tre0_vreg {
+		compatible = "regulator-fixed";
+		regulator-name = "resin_tre0_vreg";
+		gpio = <&tlmm 77 GPIO_ACTIVE_HIGH>;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		startup-delay-us = <10000>;
+		vin-supply = <&pinn_tre0_vreg>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&resin_tre0_pins>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	resin_tre1_vreg: resin_tre1_vreg {
+		compatible = "regulator-fixed";
+		regulator-name = "resin_tre1_vreg";
+		gpio = <&tlmm 76 GPIO_ACTIVE_HIGH>;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		startup-delay-us = <10000>;
+		vin-supply = <&pinn_tre1_vreg>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&resin_tre1_pins>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	resin_tre2_vreg: resin_tre2_vreg {
+		compatible = "regulator-fixed";
+		regulator-name = "resin_tre2_vreg";
+		gpio = <&tlmm 40 GPIO_ACTIVE_HIGH>;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		startup-delay-us = <10000>;
+		vin-supply = <&pinn_tre0_vreg>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&resin_tre2_pins>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	cnss_pci_iommu_group0: cnss_pci_iommu_group0 {
+		qcom,iommu-msi-size = <0x1000>;
+		qcom,iommu-dma-addr-pool = <0x0 0x70000000 0x0 0x4EC00000>;
+		qcom,iommu-dma = "fastmap";
+		qcom,iommu-geometry = <0x0 0x70000000 0x0 0x50030000>;
+		dma-coherent;
+		qcom,iommu-faults = "stall-disable", "HUPCF", "no-CFRE",
+					    "non-fatal";
+	};
+};
+
+
+&pcie0_port0 {
+	qcom,iommu-dma = "fastmap";
+	dma-coherent;
+	ath12k_wifi0: wifi@0 {
+		reg = <0 0 0 0 0>;
+		memory-region = <&qcn9625_0_mem>, <&mlo_global_mem0>, <&wifi0_iova_range>;
+		memory-region-names = "host-ddr-mem", "mlo-global-mem";
+		qcom,iommu-group = <&cnss_pci_iommu_group0>;
+		smmu_reg = <0x0 0xc0000000 0x0 0x10000>;
+		smmu_reg-names = "smmu_iova_ipa";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		dma-coherent;
+		qcom,board_id = <0x2004>;
+		qcom,wsi_index = <1>;
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+
+				wifi1_wsi_tx: endpoint {
+					remote-endpoint = <&wifi2_wsi_rx>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+
+				wifi1_wsi_rx: endpoint {
+					remote-endpoint = <&wifi3_wsi_tx>;
+				};
+			};
+		};
+	};
+};
+
+&pcie0 {
+	vddpe-3v3-supply = <&resin_tre0_vreg>;
+	dma-coherent;
+	status = "okay";
+};
+
+&pcie1_port0 {
+	qcom,iommu-dma = "fastmap";
+	dma-coherent;
+	ath12k_wifi1: wifi@1 {
+		reg = <0 0 0 0 0>;
+		memory-region = <&qcn9625_1_mem>, <&mlo_global_mem0>, <&wifi1_iova_range>;
+		memory-region-names = "host-ddr-mem", "mlo-global-mem";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		qcom,iommu-group = <&cnss_pci_iommu_group0>;
+		smmu_reg = <0x0 0xc0020000 0x0 0x10000>;
+		smmu_reg-names = "smmu_iova_ipa";
+		dma-coherent;
+		qcom,board_id = <0x2002>;
+		qcom,wsi_index = <0>;
+		qcom,wsi-controller;
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+
+				wifi2_wsi_tx: endpoint {
+					remote-endpoint = <&wifi3_wsi_rx>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+
+				wifi2_wsi_rx: endpoint {
+					remote-endpoint = <&wifi1_wsi_tx>;
+				};
+			};
+		};
+	};
+};
+
+&pcie1 {
+	vddpe-3v3-supply = <&resin_tre1_vreg>;
+	dma-coherent;
+	status = "okay";
+};
+
+&pcie2_port0 {
+	qcom,iommu-dma = "fastmap";
+	dma-coherent;
+	ath12k_wifi2: wifi@2 {
+		reg = <0 0 0 0 0>;
+		memory-region = <&qcn9625_2_mem>, <&mlo_global_mem0>, <&wifi2_iova_range>;
+		memory-region-names = "host-ddr-mem", "mlo-global-mem";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		dma-coherent;
+		qcom,iommu-group = <&cnss_pci_iommu_group0>;
+		smmu_reg = <0x0 0xc0040000 0x0 0x10000>;
+		smmu_reg-names = "smmu_iova_ipa";
+		qcom,board_id = <0x2008>;
+		qcom,wsi_index = <2>;
+		qcom,pta-num = <0>;
+		qcom,coex-mode = <0x2>;
+		qcom,bt-active-time = <0x18>;
+		qcom,bt-priority-time = <0x12>;
+		qcom,coex-algo = <0x2>;
+		qcom,pta-priority = <0x80800505>;
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+
+				wifi3_wsi_tx: endpoint {
+					remote-endpoint = <&wifi1_wsi_rx>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+
+				wifi3_wsi_rx: endpoint {
+					remote-endpoint = <&wifi2_wsi_tx>;
+				};
+			};
+		};
+	};
+};
+
+&pcie2 {
+	vddpe-3v3-supply = <&resin_tre2_vreg>;
+	dma-coherent;
+	status = "okay";
+};
+
+&tlmm {
+	resin_tre0_pins: resin-tre0-pins {
+		pins = "gpio77";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-pull-down;
+	};
+
+	resin_tre1_pins: resin-tre1-pins {
+		pins = "gpio76";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-pull-down;
+	};
+
+	resin_tre2_pins: resin-tre2-pins {
+		pins = "gpio40";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-pull-down;
+	};
+};

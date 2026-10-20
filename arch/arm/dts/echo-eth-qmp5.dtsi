@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ */
+
+&soc {
+	rtl_lgn_vreg: rtl_lgn_vreg {
+		compatible = "regulator-fixed";
+		regulator-name = "rtl_lgn_vreg";
+		gpio = <&tlmm 84 GPIO_ACTIVE_HIGH>;
+		regulator-min-microvolt = <700000>;
+		regulator-max-microvolt = <700000>;
+		enable-active-high;
+		regulator-enable-ramp-delay = <100000>;
+	};
+
+	sfp_vreg: sfp_vreg {
+		compatible = "regulator-fixed";
+		regulator-name = "sfp_vreg";
+		gpio = <&tlmm 83 GPIO_ACTIVE_HIGH>;
+		regulator-min-microvolt = <700000>;
+		regulator-max-microvolt = <700000>;
+		enable-active-high;
+		regulator-enable-ramp-delay = <100000>;
+	};
+};
+
+&emac2_phy_reset_state_active {
+	mux {
+		pins = "gpio117";
+	};
+
+	config {
+		pins = "gpio117";
+	};
+};
+
+&emac2_phy_reset_state_inactive {
+	mux {
+		pins = "gpio117";
+	};
+
+	config {
+		pins = "gpio117";
+	};
+};
+
+&emac0 {
+	status = "okay";
+	phy-handle = <&emac0_phy>;
+	phy-mode = "usxgmii";
+	managed = "auto";
+	snps,reset-active-low;
+	snps,reset-gpio = <&tlmm 96 GPIO_ACTIVE_LOW>;
+	snps,reset-delays-us = <1000 100000 221000>;
+	vreg_emac_phy-supply = <&rtl_lgn_vreg>;
+};
+
+&emac0_mdio {
+	emac0_phy: emac0_phy {
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reg = <0x1>;
+		device_type = "ethernet-phy";
+		interrupts-extended = <&tlmm 97 IRQ_TYPE_EDGE_FALLING>;
+	};
+};
+
+&pcs0 {
+	status = "okay";
+};
+
+&serdes0 {
+	status = "okay";
+};
+
+&emac1 {
+	status = "okay";
+	phy-handle = <&emac1_phy>;
+	phy-mode = "usxgmii";
+	managed = "auto";
+	snps,reset-active-low;
+	snps,reset-gpio = <&tlmm 108 GPIO_ACTIVE_LOW>;
+	snps,reset-delays-us = <1000 100000 221000>;
+	vreg_emac_phy-supply = <&rtl_lgn_vreg>;
+};
+
+&emac1_mdio {
+	emac1_phy: emac1_phy {
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reg = <0xc>;
+		device_type = "ethernet-phy";
+		interrupts-extended = <&tlmm 109 IRQ_TYPE_EDGE_FALLING>;
+	};
+};
+
+&pcs1 {
+	status = "okay";
+};
+
+&serdes1 {
+	status = "okay";
+};
+
+&emac2 {
+	vreg_emac_phy-supply = <&sfp_vreg>;
+};

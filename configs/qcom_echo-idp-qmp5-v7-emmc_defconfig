@@ -1,0 +1,79 @@
+# Configuration for building U-Boot for the Echo IDP QMP5 (v7) eMMC board
+#
+# QMP5 board-revision note: echo-idp-qmp5-v7 is the provisional Linux
+# reference revision (highest version number in the kernel's Makefile);
+# it is not yet confirmed as the production-shipping QMP5 eMMC revision.
+
+#include "qcom_defconfig"
+#include "board/qualcomm/debug-echo-idp-qmp5-v7-emmc.config"
+
+# Otherwise buildman thinks this isn't an ARM platform
+CONFIG_ARM=y
+
+# CONFIG_OF_UPSTREAM is not set
+
+CONFIG_DEFAULT_DEVICE_TREE="echo-idp-qmp5-v7"
+
+# Address where U-Boot will be loaded
+CONFIG_TEXT_BASE=0x83E00000
+CONFIG_REMAKE_ELF=y
+
+CONFIG_FASTBOOT_BUF_ADDR=0xB0500000
+
+CONFIG_PHY_QCOM_QMP_USB=y
+CONFIG_PHY_QCOM_M31_EUSB2=y
+
+# Bulk GENI FW late-init probes block devices and hangs on this board;
+# peripheral drivers already load firmware on-demand during their own probe.
+# CONFIG_QCOM_GENI_FW_LATE_INIT is not set
+
+# Some GENI SE wrappers on this SoC are shared with other execution
+# environments (e.g. the modem) and stay TrustZone XPU-locked unless
+# unlocked via PIL, same as EDK2/ABL's GpiDrvLib does.
+CONFIG_QCOM_GENI_SE_PIL_UNLOCK=y
+
+# Dynamic Linux kernel command-line construction (root=, serial number,
+# androidboot.force_normal_boot, platform-identity tokens), replacing the
+# equivalent logic Qualcomm's EDK2/ABL bootloader used to perform before
+# this board's boot chain ran U-Boot directly after XBL with no ABL stage.
+# See arch/arm/mach-snapdragon/qcom_bootargs.c.
+CONFIG_QCOM_BOOTARGS=y
+
+# echo-idp-qmp5-v7 has eMMC only, not UFS/SCSI - override qcom_defconfig settings
+CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME="mmc"
+CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID=0
+
+# Select the kernel FIT's per-board config via the standard
+# board_fit_config_name_match() weak hook (overridden in
+# qcom_fit_board_match.c): boot.scr loads the FIT and calls plain
+# `bootm $addr` (no #config suffix), so fit_conf_get_node()
+# (boot/image-fit.c) falls into fit_find_config_node() (boot/common_fit.c),
+# which calls the hook once per /configurations node, matching each node's
+# existing qcom,board-id description string against live hardware
+# detection. Falls back to the FIT's own default config if none match. All
+# board-identity data lives in the .its file - adding a board never
+# requires a U-Boot change.
+# Not used for an unrelated reason: CONFIG_QCOM_FIT_MULTIDTB
+# (qcom_fit_multidtb.c's separate qclinux_fit.img/dtb_a multi-token match).
+# CONFIG_QCOM_FIT_MULTIDTB is not set
+CONFIG_QCOM_HWDETECT=y
+
+# CONFIG_MULTI_DTB_FIT is required for the board_fit_config_name_match()
+# path above (it gates fit_conf_get_node()'s conf_uname==NULL branch) and
+# also wraps U-Boot's own control DTB in a FIT container. Proven necessary
+# on sa535m-emmc-tdp (see that board's defconfig for the full history of
+# the "Couldn't find a valid memory map!" panic this avoids); carried over
+# here on the same SoC/build-model basis. Not yet validated on QMP5
+# hardware specifically.
+CONFIG_MULTI_DTB_FIT=y
+
+# CONFIG_SCSI is not set
+
+# Environment stored in eMMC logfs partition
+CONFIG_ENV_IS_IN_MMC=y
+CONFIG_ENV_MMC_USE_SW_PARTITION=y
+CONFIG_ENV_MMC_SW_PARTITION="logfs"
+CONFIG_ENV_OFFSET=0x0
+CONFIG_ENV_SIZE=0x4000
+
+CONFIG_WATCHDOG_AUTOSTART=y
