@@ -691,6 +691,7 @@ static int echo_enable(struct clk *clk)
 
 static const struct qcom_reset_map echo_gcc_resets[] = {
 	[GCC_EMAC0_BCR] = { 0x71000 },
+	[GCC_EMAC0_RGMII_CLK_ARES] = { 0x71058, 2 },
 	[GCC_EMAC1_BCR] = { 0x72000 },
 	[GCC_EMAC2_BCR] = { 0x16000 },
 	[GCC_I2C_BCR] = { 0x19000 },
