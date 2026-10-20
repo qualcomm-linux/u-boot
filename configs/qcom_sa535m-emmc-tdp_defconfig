@@ -30,6 +30,13 @@ CONFIG_WATCHDOG_AUTOSTART=y
 # unlocked via PIL, same as EDK2/ABL's GpiDrvLib does.
 CONFIG_QCOM_GENI_SE_PIL_UNLOCK=y
 
+# Dynamic Linux kernel command-line construction (root=, serial number,
+# androidboot.force_normal_boot, platform-identity tokens), replacing the
+# equivalent logic Qualcomm's EDK2/ABL bootloader used to perform before
+# this board's boot chain ran U-Boot directly after XBL with no ABL stage.
+# See arch/arm/mach-snapdragon/qcom_bootargs.c.
+CONFIG_QCOM_BOOTARGS=y
+
 # sa535m-emmc-tdp has eMMC only, not UFS/SCSI - override qcom_defconfig settings
 CONFIG_FASTBOOT_FLASH_BLOCK_INTERFACE_NAME="mmc"
 CONFIG_FASTBOOT_FLASH_BLOCK_DEVICE_ID=0

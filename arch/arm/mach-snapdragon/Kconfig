@@ -84,6 +84,17 @@ config QCOM_HWDETECT
 	  Hardware parameter detection from SMEM and TCSR for
 	  DTB selection and other platform subsystems.
 
+config QCOM_BOOTARGS
+	bool "Dynamic Linux kernel command-line construction"
+	depends on BOOTSTD && MMC && PARTITIONS && OF_LIBFDT
+	help
+	  Override board_fdt_chosen_bootargs() to append board-specific,
+	  runtime-derived kernel command-line arguments (root=, serial
+	  number, boot-mode flag, boot device) on top of the static
+	  CONFIG_BOOTARGS base, replacing the equivalent logic Qualcomm's
+	  EDK2/ABL bootloader previously performed before handing off to
+	  Linux.
+
 choice
 	prompt "Qualcomm boot0.h workaround"
 	optional
