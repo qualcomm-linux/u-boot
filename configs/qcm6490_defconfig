@@ -5,6 +5,7 @@
 
 #include "qcom_defconfig"
 #include "board/qualcomm/debug-qcm6490.config"
+#include "board/qualcomm/exit-gunyah.config"
 
 # Otherwise buildman thinks this isn't an ARM platform
 CONFIG_ARM=y
