@@ -4,6 +4,7 @@
 # a dedicated "uefi_a" partition for edk2/U-Boot)
 
 #include "qcom_defconfig"
+#include "board/qualcomm/exit-gunyah.config"
 
 # Otherwise buildman thinks this isn't an ARM platform
 CONFIG_ARM=y
@@ -21,9 +22,6 @@ CONFIG_QCOM_GENERATE_MBN=y
 CONFIG_DEFAULT_DEVICE_TREE="qcom/monaco-evk"
 CONFIG_PINCTRL_QCOM_QCS8300=y
 CONFIG_INTERCONNECT_QCOM_QCS8300=y
-
-CONFIG_ENABLE_ARM_SOC_BOOT0_HOOK=y
-CONFIG_QCOM_EL2_GUNYAH_EXIT_SUPPORT=y
 
 CONFIG_PHY_QCOM_QMP_USB=y
 
