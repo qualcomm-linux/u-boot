@@ -41,8 +41,10 @@
 };
 
 &sdhc_2 {
+	resets = <&gcc GCC_SDCC2_BCR>;
 	vmmc-supply = <&pm8150_l10>;
 	vqmmc-supply = <&pm8150_l2>;
+	max-frequency = <100000000>;
 
 	no-sdio;
 	no-mmc;
@@ -50,7 +52,6 @@
 	pinctrl-0 = <&sdc2_default &sdc2_card_det_n>;
 	pinctrl-1 = <&sdc2_sleep &sdc2_card_det_n>;
 	pinctrl-names = "default", "sleep";
-
 	cd-gpios = <&tlmm 89 GPIO_ACTIVE_LOW>;
 
 	status = "okay";
