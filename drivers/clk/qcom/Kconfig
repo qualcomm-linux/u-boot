@@ -276,16 +276,9 @@ config CLK_QCOM_RPMH
 	depends on CLK
 	help
 	  Say Y here to enable support for the RPMh-managed clocks found on
-	  SoCs such as SC7280, SM8550, SM8650 and SA8775P. These clocks are
-	  owned by the always-on subsystem; the driver only reports the fixed
-	  CXO rate (bi_tcxo_div2) and accepts no-op enable/set_rate requests.
-
-config SPL_CLK_QCOM_RPMH
-	bool "Qualcomm RPMh clock driver in SPL"
-	depends on SPL_CLK
-	help
-	  SPL variant of CLK_QCOM_RPMH.
-	  See the help of CLK_QCOM_RPMH for details.
+	  SoCs such as SM8550, SM8650 and SA8775P. These clocks are owned by
+	  the always-on subsystem; the driver only reports the fixed CXO rate
+	  (bi_tcxo_div2) and accepts no-op enable/set_rate requests.
 
 config CLK_QCOM_SA8775P
 	bool "Qualcomm SA8775 GCC"
@@ -300,7 +293,6 @@ config SPL_CLK_QCOM_SA8775P
 	bool "Qualcomm SA8775 GCC in SPL"
 	depends on SPL_CLK
 	select SPL_CLK_QCOM
-	select SPL_CLK_QCOM_RPMH
 	help
 	  SPL variant of CLK_QCOM_SA8775P.
 	  See the help of CLK_QCOM_SA8775P for details.
@@ -445,7 +437,6 @@ config SPL_CLK_QCOM_SM8550
 	bool "Qualcomm SM8550 GCC in SPL"
 	depends on SPL_CLK
 	select SPL_CLK_QCOM
-	select SPL_CLK_QCOM_RPMH
 	help
 	  SPL variant of CLK_QCOM_SM8550.
 	  See the help of CLK_QCOM_SM8550 for details.
@@ -463,7 +454,6 @@ config SPL_CLK_QCOM_SM8650
 	bool "Qualcomm SM8650 GCC in SPL"
 	depends on SPL_CLK
 	select SPL_CLK_QCOM
-	select SPL_CLK_QCOM_RPMH
 	help
 	  SPL variant of CLK_QCOM_SM8650.
 	  See the help of CLK_QCOM_SM8650 for details.
@@ -471,7 +461,6 @@ config SPL_CLK_QCOM_SM8650
 config CLK_QCOM_SC7280
 	bool "Qualcomm SC7280 GCC"
 	select CLK_QCOM
-	select CLK_QCOM_RPMH
 	help
 	  Say Y here to enable support for the Global Clock Controller
 	  on the Snapdragon SC7280 SoC. This driver supports the clocks
@@ -481,7 +470,6 @@ config SPL_CLK_QCOM_SC7280
 	bool "Qualcomm SC7280 GCC in SPL"
 	depends on SPL_CLK
 	select SPL_CLK_QCOM
-	select SPL_CLK_QCOM_RPMH
 	help
 	  SPL variant of CLK_QCOM_SC7280.
 	  See the help of CLK_QCOM_SC7280 for details.
