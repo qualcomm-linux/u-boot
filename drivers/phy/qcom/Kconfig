@@ -92,3 +92,11 @@ config PHY_QCOM_USB_SS
 	help
 	  Enable this to support the Super-Speed USB transceiver on various
 	  Qualcomm chipsets.
+
+config PHY_QCOM_SGMII_ETH
+	bool "Qualcomm DWMAC SGMII SerDes/PHY driver"
+	depends on PHY && ARCH_SNAPDRAGON
+	help
+	  Enable this to support the internal SerDes/SGMII PHY used by the
+	  Synopsys DWMAC/DWC_ETH_QOS Ethernet controller on Qualcomm
+	  SA8775P (Lemans).
