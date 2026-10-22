@@ -38,6 +38,22 @@
  * HLOS's boot.scr already supplies is intentionally left for boot.scr to
  * own; duplicating byte-identical values here would just be redundant.
  *
+ * TEMPORARY: boot.scr's own "setenv bootargs" is currently unreachable
+ * on this board. board_fdt_chosen_bootargs() only consults env "bootargs"
+ * (the value boot.scr sets) when the incoming FIT kernel DTB's own
+ * /chosen/bootargs property is empty - but the DTB shipped today still
+ * carries a non-empty bootargs property (just "console_msg_format=syslog"),
+ * so that branch always wins and boot.scr's string is silently discarded
+ * in its entirety. The real fix is on the kernel/HLOS side: drop
+ * /chosen/bootargs from the FIT's kernel DTBs (one-line removal, same
+ * change across every board-variant DTB - see
+ * docs/hlos-fit-kernel-team-diff-reference.md) so boot.scr's string
+ * actually gets read. That fix is still in progress on the kernel team's
+ * side, so every token boot.scr's static string carries is duplicated
+ * into this table below for now, purely as a stopgap. Revert this block
+ * (keep only androidboot.baseband=/androidboot.fstab_suffix=/
+ * console_msg_format= below) once the kernel team ships the DTB fix.
+ *
  * androidboot.bootdevice= and silent_boot.mode= are NOT in this table -
  * ABL computes both dynamically too (GetBootDevice() / GetRebootReason()
  * in UpdateCmdLine.c), but derived at runtime below instead of hardcoded,
@@ -75,6 +91,34 @@ static const struct qcom_bootargs_static_arg qcom_bootargs_static[] = {
 	 * same value.
 	 */
 	{ "console_msg_format",	"syslog" },
+	/*
+	 * TEMPORARY STOPGAP - everything below duplicates a token boot.scr
+	 * already sets (same key, same value, verbatim from boot.vfat's
+	 * own "setenv bootargs" string - see
+	 * docs/hlos-boot-scr-fix-proposal.md). Needed only because that
+	 * string is currently unreachable (see comment above the struct
+	 * definition); remove this whole block once the kernel team's FIT
+	 * DTB fix lands and boot.scr's own string becomes reachable again.
+	 * "rootwait" is deliberately not duplicated here - U-Boot already
+	 * sets it dynamically alongside root= (qcom_root_cmdline_arg()
+	 * below), so it doesn't need a stopgap entry.
+	 */
+	{ "ro",				BOOTFLOWCL_EMPTY },
+	{ "console",			"ttyMSM0,115200n8" },
+	{ "androidboot.hardware",	"qcom" },
+	{ "msm_rtb.filter",		"0x237" },
+	{ "androidboot.console",	"ttyMSM0" },
+	{ "lpm_levels.sleep_disabled",	"1" },
+	{ "firmware_class.path",	"/lib/firmware/updates,/firmware/image" },
+	{ "service_locator.enable",	"1" },
+	{ "net.ifnames",		"0" },
+	{ "atlantic_fwd.rx_ring_size",	"512" },
+	{ "atlantic_fwd.rx_linear",	"1" },
+	{ "pcie_ports",			"compat" },
+	{ "pci",			"pcie_bus_safe" },
+	{ "qcom_scm.download_mode",	"1" },
+	{ "page_owner",			"on" },
+	{ "slub_debug",			"fzpu" },
 };
 
 /* Working buffer must comfortably fit the base DTS string plus every
