@@ -12,6 +12,7 @@
 #include <dm/uclass.h>
 #include <init.h>
 #include <linux/err.h>
+#include <linux/kernel.h>
 #include <linux/sizes.h>
 #include <linux/string.h>
 #include <malloc.h>
@@ -313,6 +314,13 @@ fail:
 		reset_cpu();
 }
 #endif
+
+
+/**
+ * qcom_spl_soc_qclib_override() - Populate Shikra-specific interface table.
+ *
+ * Adds Shikra-specific blobs/entries to the QCLIB interface table.
+ */
 int qcom_spl_soc_qclib_override(struct interface_table *table,
 				const void *fit, int images_node)
 {
@@ -362,6 +370,10 @@ void qcom_spl_soc_shrm_reset(void)
 int qcom_spl_soc_pre_qclib_routine(void)
 {
 	qcom_spl_soc_shrm_reset();
+
+	if (IS_ENABLED(CONFIG_QCOM_SPL_CDT_SUPPORTED)) {
+		return qcom_spl_cdt_load();
+	}
 
 	return 0;
 }

@@ -123,6 +123,14 @@ int __weak qclib_populate_interface_table(struct interface_table *if_tbl,
 	if (ret)
 		return ret;
 
+	if (IS_ENABLED(CONFIG_QCOM_SPL_CDT_SUPPORTED)) {
+		ret = qclib_add_iftbl_entry(if_tbl, CONFIG_QCOM_SPL_CDT_PARTITION_NAME,
+					    CONFIG_QCOM_SPL_BOOTIMEM_CDT_BASE,
+					    CONFIG_QCOM_SPL_BOOTIMEM_CDT_SIZE);
+		if (ret)
+			return ret;
+	}
+
 	return qcom_spl_soc_qclib_override(if_tbl, fit, images_node);
 }
 
