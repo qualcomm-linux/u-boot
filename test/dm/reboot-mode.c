@@ -3,9 +3,9 @@
  * (C) 2018 Theobroma Systems Design und Consulting GmbH
  */
 
-#include <dm.h>
-#include <reboot-mode/reboot-mode.h>
+#include <command.h>
 #include <console.h>
+#include <dm.h>
 #include <env.h>
 #include <log.h>
 #include <asm/gpio.h>
@@ -16,6 +16,7 @@
 #include <test/ut.h>
 #include <rtc.h>
 #include <linux/byteorder/generic.h>
+#include <reboot-mode/reboot-mode.h>
 
 /*
  * A trigger-only reboot-mode backend used to prove framework-driven dispatch
@@ -25,15 +26,19 @@
 static u32 test_trigger_magic[REBOOT_MODE_MAX_MAGIC];
 static int test_trigger_count;
 
-static int test_trigger(struct udevice *dev, const u32 *magic, int count)
+static int test_trigger(struct udevice *dev, const u32 *magic, uint count)
 {
-	int i;
+	uint i;
 
 	test_trigger_count = count;
 	for (i = 0; i < count && i < REBOOT_MODE_MAX_MAGIC; i++)
 		test_trigger_magic[i] = magic[i];
 
-	/* A real backend does not return here; the test one does. */
+	/*
+	 * A real backend does not return on success, so any return value is a
+	 * failure. Return a distinctive error so the test can tell that the
+	 * trigger op was reached.
+	 */
 	return -EINPROGRESS;
 }
 
@@ -108,8 +113,7 @@ DM_TEST(dm_test_reboot_mode_rtc,
 static int dm_test_reboot_mode_request(struct unit_test_state *uts)
 {
 	test_trigger_count = 0;
-	test_trigger_magic[0] = 0;
-	test_trigger_magic[1] = 0;
+	memset(test_trigger_magic, '\0', sizeof(test_trigger_magic));
 
 	/*
 	 * "obelisk" is a 2-cell mode <0x80000000 0x00000001>. The trigger
@@ -136,13 +140,18 @@ static int dm_test_reboot_mode_request(struct unit_test_state *uts)
 DM_TEST(dm_test_reboot_mode_request,
 	UTF_PROBE_TEST | UTF_SCAN_FDT | UTF_FLAT_TREE);
 
-/* reboot_mode_list() enumerates only triggerable modes */
+/* "reset -l" lists only triggerable modes */
 static int dm_test_reboot_mode_list(struct unit_test_state *uts)
 {
 	ut_assertok(console_record_reset_enable());
 
-	ut_assertok(reboot_mode_list());
+	ut_assertok(run_command("reset -l", 0));
 
+	/*
+	 * Modes are listed in device tree order: devices are probed in the
+	 * order of their nodes and properties are read in the order they are
+	 * written in the .dts file.
+	 */
 	ut_assert_nextline("Available reset modes:");
 	ut_assert_nextline("  obelisk");
 	ut_assert_nextline("  sarcophagus");
@@ -152,4 +161,35 @@ static int dm_test_reboot_mode_list(struct unit_test_state *uts)
 	return 0;
 }
 DM_TEST(dm_test_reboot_mode_list,
-	UTF_PROBE_TEST | UTF_SCAN_FDT | UTF_FLAT_TREE);
+	UTF_PROBE_TEST | UTF_SCAN_FDT | UTF_FLAT_TREE | UTF_CONSOLE);
+
+/* "reset -m" reaches the trigger op, and rejects an unknown mode */
+static int dm_test_reboot_mode_cmd(struct unit_test_state *uts)
+{
+	ut_assertok(console_record_reset_enable());
+
+	/* The test backend returns instead of resetting, so the command fails */
+	test_trigger_count = 0;
+	ut_asserteq(1, run_command("reset -m obelisk", 0));
+	ut_asserteq(2, test_trigger_count);
+	ut_assert_nextline("resetting into \"obelisk\" mode ...");
+	ut_assert_nextline("Failed to reset into \"obelisk\" mode");
+	ut_assert_console_end();
+
+	/* An unknown mode never reaches the trigger op */
+	test_trigger_count = 0;
+	ut_asserteq(1, run_command("reset -m nonesuch", 0));
+	ut_asserteq(0, test_trigger_count);
+	ut_assert_nextline("Unknown reset mode \"nonesuch\"");
+	ut_assert_nextline("Available reset modes:");
+	ut_assert_nextline("  obelisk");
+	ut_assert_nextline("  sarcophagus");
+	ut_assert_console_end();
+
+	/* A missing mode name is a usage error */
+	ut_asserteq(1, run_command("reset -m", 0));
+
+	return 0;
+}
+DM_TEST(dm_test_reboot_mode_cmd,
+	UTF_PROBE_TEST | UTF_SCAN_FDT | UTF_FLAT_TREE | UTF_CONSOLE);

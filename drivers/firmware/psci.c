@@ -189,9 +189,9 @@ static int psci_bind(struct udevice *dev)
 	}
 
 	/*
-	 * Bind the PSCI reboot-mode driver to the "reboot-mode" subnode so it
-	 * can trigger SYSTEM_RESET2 vendor resets described by "mode-*"
-	 * properties there (for example EDL/download mode).
+	 * Bind the reboot-mode driver to the "reboot-mode" subnode. SYSTEM_RESET2
+	 * support is checked when a mode is triggered, and a bind failure is not
+	 * fatal for PSCI, so only warn.
 	 */
 	if (CONFIG_IS_ENABLED(REBOOT_MODE_PSCI)) {
 		ofnode rm_node = ofnode_find_subnode(dev_ofnode(dev),
