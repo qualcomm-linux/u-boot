@@ -63,6 +63,49 @@ config QCOM_HWDETECT
 	  Hardware parameter detection from SMEM and TCSR for
 	  DTB selection and other platform subsystems.
 
+config QCOM_DDR_TRAINING_SUPPORTED
+	bool "Enable DDR training data save/restore support in SPL"
+	depends on SPL
+	help
+	  Enable support for saving and restoring QCLIB's DDR training data
+	  to/from a dedicated storage partition during the SPL boot flow.
+
+if QCOM_DDR_TRAINING_SUPPORTED
+
+config QCOM_DDR_TRAINING_PARTITION_NAME
+	string "DDR training GPT partition name"
+	depends on SPL_PARTITIONS
+	default "ddr"
+	help
+	  Name of the GPT partition on the boot medium used to persist DDR
+	  training data across boots. Locates the DDR training-data
+	  partition by GPT partition name.
+
+config QCOM_DDR_TRAINING_PARTITION_GUID
+	string "DDR training GPT partition type GUID"
+	depends on SPL_PARTITION_TYPE_GUID
+	help
+	  GPT partition type GUID identifying the partition on the boot
+	  medium used to persist DDR training data across boots. Locates
+	  the DDR training-data partition by GPT partition type GUID.
+
+config QCOM_SPL_BOOTIMEM_DDR_TRAINING_BASE
+	hex "IMEM address to stage DDR training data at"
+	default 0x0c368000
+	help
+	  Address within BOOTIMEM where DDR training data is staged, to be
+	  consumed/produced by QCLIB via the interface table.
+
+config QCOM_SPL_BOOTIMEM_DDR_TRAINING_SIZE
+	hex "Maximum number of bytes to stage for DDR training data"
+	default 0x8000
+	help
+	  Maximum number of bytes read from/written to the DDR training
+	  partition and staged at
+	  CONFIG_QCOM_SPL_BOOTIMEM_DDR_TRAINING_BASE.
+
+endif # QCOM_DDR_TRAINING_SUPPORTED
+
 choice
 	prompt "Qualcomm boot0.h workaround"
 	optional

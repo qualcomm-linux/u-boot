@@ -35,6 +35,144 @@ void __weak qcom_spl_soc_rpm_reset(void)
 {
 }
 
+#if IS_ENABLED(CONFIG_QCOM_DDR_TRAINING_SUPPORTED)
+/**
+ * qcom_spl_ddr_training_load() - Load the DDR training data from the boot
+ * medium.
+ *
+ * This function reads the boot medium for DDR training data which gets saved
+ * in IMEM location.
+ *
+ * Return: 0 on success, or a negative error code on failure.
+ */
+int qcom_spl_ddr_training_load(void)
+{
+	struct blk_desc *desc;
+	struct disk_partition info;
+	lbaint_t blocks;
+	int ret;
+	void *blk_buf = NULL;
+
+	ret = qcom_spl_get_boot_blk_desc(&desc);
+	if (ret) {
+		pr_debug("DDR training: boot device not supported (%d)\n", ret);
+		return ret;
+	}
+
+#if defined(CONFIG_QCOM_DDR_TRAINING_PARTITION_NAME)
+	ret = part_get_info_by_name(desc, CONFIG_QCOM_DDR_TRAINING_PARTITION_NAME,
+				    &info);
+#elif defined(CONFIG_QCOM_DDR_TRAINING_PARTITION_GUID)
+	ret = part_get_info_by_type_guid(desc, CONFIG_QCOM_DDR_TRAINING_PARTITION_GUID,
+					 &info);
+#else
+	ret = -EINVAL;
+#endif
+	if (ret < 0) {
+		pr_debug("DDR training: partition not found (%d)\n", ret);
+		return ret;
+	}
+
+	blocks = DIV_ROUND_UP(CONFIG_QCOM_SPL_BOOTIMEM_DDR_TRAINING_SIZE,
+			      info.blksz);
+	if (blocks > info.size)
+		blocks = info.size;
+
+	{
+		blk_buf = malloc_cache_aligned(blocks * info.blksz);
+
+		if (!blk_buf) {
+			return -ENOMEM;
+		}
+
+		size_t read_size = blocks * info.blksz;
+		size_t copy_size = min_t(size_t, CONFIG_QCOM_SPL_BOOTIMEM_DDR_TRAINING_SIZE,
+					 read_size);
+
+		if (blk_dread(desc, info.start, blocks,
+			     (void *)blk_buf) != blocks) {
+			pr_err("DDR training: failed to read partition '%s'\n",
+			       CONFIG_QCOM_DDR_TRAINING_PARTITION_NAME);
+			free(blk_buf);
+			return -EIO;
+		}
+
+		memcpy((u8 *)CONFIG_QCOM_SPL_BOOTIMEM_DDR_TRAINING_BASE, blk_buf, copy_size);
+		free(blk_buf);
+	}
+
+	return 0;
+}
+
+/**
+ * qcom_spl_ddr_training_save() - Persist DDR training data QCLIB asked to
+ * save.
+ * @address:	Address of the blob to save (as updated by QCLIB on return).
+ * @size:	Size of the blob to save, in bytes.
+ *
+ * Return: 0 on success, or a negative error code on failure.
+ */
+int qcom_spl_ddr_training_save(u64 address, u32 size)
+{
+	struct blk_desc *desc;
+	struct disk_partition info;
+	lbaint_t blocks;
+	int ret;
+
+	if (!address || !size) {
+		pr_err("DDR training: QCLIB requested save with no data\n");
+		return -EINVAL;
+	}
+
+	ret = qcom_spl_get_boot_blk_desc(&desc);
+	if (ret) {
+		pr_err("DDR training: boot device not supported for save (%d)\n",
+		       ret);
+		return ret;
+	}
+
+#if defined(CONFIG_QCOM_DDR_TRAINING_PARTITION_NAME)
+	ret = part_get_info_by_name(desc, CONFIG_QCOM_DDR_TRAINING_PARTITION_NAME,
+				    &info);
+#elif defined(CONFIG_QCOM_DDR_TRAINING_PARTITION_GUID)
+	ret = part_get_info_by_type_guid(desc, CONFIG_QCOM_DDR_TRAINING_PARTITION_GUID,
+					 &info);
+#else
+	ret = -EINVAL;
+#endif
+	if (ret < 0) {
+		pr_err("DDR training: partition not found for save (%d)\n", ret);
+		return ret;
+	}
+
+	blocks = DIV_ROUND_UP(size, info.blksz);
+	if (blocks > info.size) {
+		pr_err("DDR training: data (%u bytes) too large for partition\n",
+		       size);
+		return -ENOSPC;
+	}
+
+	if (blk_dwrite(desc, info.start, blocks,
+		      (void *)(uintptr_t)address) != blocks) {
+		pr_err("DDR training: failed to write partition '%s'\n",
+		       CONFIG_QCOM_DDR_TRAINING_PARTITION_NAME);
+		return -EIO;
+	}
+
+	return 0;
+}
+#else
+int qcom_spl_ddr_training_load(void)
+{
+	return -ENOSYS;
+}
+
+int qcom_spl_ddr_training_save(u64 address, u32 size)
+{
+	return -ENOSYS;
+}
+#endif /* IS_ENABLED(CONFIG_QCOM_DDR_TRAINING_SUPPORTED) */
+
 #if IS_ENABLED(CONFIG_SPL_SMEM)
 /**
  * qcom_spl_populate_smem() - Populate shared memory (SMEM) information.

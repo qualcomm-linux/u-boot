@@ -15,6 +15,9 @@
 /* interface_table.global_attributes bits */
 #define QCLIB_GA_ENABLE_UART_LOGGING	BIT(0)
 
+/* interface_table per entry attribute bit */
+#define QCLIB_ATTR_SAVE_TO_STORAGE		BIT(0)
+
 /**
  * struct interface_table_entry - Meta data for blobs in QCLIB interface
  * @entry_name:	Name of the data blob (e.g., "dcb_settings").
