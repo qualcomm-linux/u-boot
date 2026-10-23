@@ -42,16 +42,6 @@ struct efi_fw_image fw_images[] = {
 		.fw_name = u"SANDBOX-UBOOT-ENV",
 		.image_index = 2,
 	},
-	{
-		/*
-		 * Aliases image_index 3 onto the same DFU alt setting (0) as
-		 * SANDBOX-UBOOT above, to exercise the
-		 * efi_firmware_get_dfu_alt_num() override below and prove it
-		 * is consulted instead of the default (image_index - 1 = 2).
-		 */
-		.fw_name = u"SANDBOX-ALTIMG",
-		.image_index = 3,
-	},
 #elif defined(CONFIG_EFI_CAPSULE_FIRMWARE_FIT)
 	{
 		.fw_name = u"SANDBOX-FIT",
@@ -67,12 +57,17 @@ struct efi_capsule_update_info update_info = {
 	.images = fw_images,
 };
 
-u8 efi_firmware_get_dfu_alt_num(u8 image_index)
+u8 efi_capsule_resolve_image_index(const efi_guid_t *image_type,
+				   u8 capsule_index)
 {
-	if (image_index == 3)
-		return 0;
+	int i;
 
-	return image_index - 1;
+	for (i = 0; i < update_info.num_images; i++) {
+		if (!guidcmp(&update_info.images[i].image_type_id, image_type))
+			return update_info.images[i].image_index;
+	}
+
+	return capsule_index;
 }
 
 #endif /* EFI_HAVE_CAPSULE_SUPPORT */
