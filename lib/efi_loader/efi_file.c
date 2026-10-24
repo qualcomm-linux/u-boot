@@ -1229,7 +1229,12 @@ efi_status_t efi_open_volume_int(struct efi_simple_file_system_protocol *this,
 {
 	struct file_system *fs = to_fs(this);
 
+	if (fs_set_blk_dev_with_part(fs->desc, fs->part))
+		return EFI_UNSUPPORTED;
+
 	*root = file_open(fs, NULL, NULL, 0, 0);
+	if (!*root)
+		return EFI_UNSUPPORTED;
 
 	return EFI_SUCCESS;
 }
