@@ -355,27 +355,6 @@ efi_fs_from_path(struct efi_device_path *full_path)
 	return handler->protocol_interface;
 }
 
-/**
- * efi_fs_exists() - check if a partition bears a file system
- *
- * @desc:	block device descriptor
- * @part:	partition number
- * Return:	1 if a file system exists on the partition
- *		0 otherwise
- */
-static int efi_fs_exists(struct blk_desc *desc, int part)
-{
-	if (fs_set_blk_dev_with_part(desc, part))
-		return 0;
-
-	if (fs_get_type() == FS_TYPE_ANY)
-		return 0;
-
-	fs_close();
-
-	return 1;
-}
-
 static void efi_disk_free_diskobj(struct efi_disk_obj *diskobj)
 {
 	struct efi_device_path *dp = diskobj->dp;
@@ -528,10 +507,11 @@ static efi_status_t efi_disk_add_dev(
 
 	/*
 	 * On partitions or whole disks without partitions install the
-	 * simple file system protocol if a file system is available.
+	 * simple file system protocol. The filesystem type probe is
+	 * deferred to OpenVolume() so this install stays cheap even for
+	 * raw partitions that never hold a filesystem.
 	 */
-	if ((part || desc->part_type == PART_TYPE_UNKNOWN) &&
-	    efi_fs_exists(desc, part)) {
+	if (part || desc->part_type == PART_TYPE_UNKNOWN) {
 		ret = efi_create_simple_file_system(desc, part, diskobj->dp,
 						    &diskobj->volume);
 		if (ret != EFI_SUCCESS)
