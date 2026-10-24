@@ -316,19 +316,43 @@ static efi_status_t fill_default_file_path(struct udevice *blk,
 					   struct efi_device_path **dp)
 {
 	efi_status_t ret;
-	struct udevice *partition;
+	struct udevice *partition, *esp_partition = NULL;
 
 	/* image that has no partition table but a file system */
 	ret = search_default_file(blk, dp);
 	if (ret == EFI_SUCCESS)
 		return ret;
 
-	/* try the partitions */
+	/*
+	 * Try the EFI system partition first. It is the partition most
+	 * likely to hold a default boot file, so checking it first avoids
+	 * probing every other partition on disks with many non-filesystem
+	 * partitions before reaching it.
+	 */
+	device_foreach_child(partition, blk) {
+		struct disk_part *part_data;
+
+		if (device_get_uclass_id(partition) != UCLASS_PARTITION)
+			continue;
+
+		part_data = dev_get_uclass_plat(partition);
+		if (part_data->gpt_part_info.bootable & PART_EFI_SYSTEM_PARTITION) {
+			esp_partition = partition;
+			ret = search_default_file(partition, dp);
+			if (ret == EFI_SUCCESS)
+				return ret;
+			break;
+		}
+	}
+
+	/* try the remaining partitions */
 	device_foreach_child(partition, blk) {
 		enum uclass_id id;
 
 		id = device_get_uclass_id(partition);
 		if (id != UCLASS_PARTITION)
+			continue;
+		if (partition == esp_partition)
 			continue;
 
 		ret = search_default_file(partition, dp);
