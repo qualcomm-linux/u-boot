@@ -17,6 +17,10 @@ static char pin_name[MAX_PIN_NAME_LEN] __section(".data");
 
 typedef unsigned int msm_pin_function[MSM_PIN_FUNCTION_COUNT];
 
+static const unsigned int echo_pin_offsets[137] = {
+	[0 ... 136] = 0x100000,
+};
+
 #define PINGROUP(id, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11)\
 	{\
 		msm_mux_gpio, /* gpio mode */\
@@ -676,6 +680,7 @@ static int echo_get_function_mux(__maybe_unused unsigned int pin,
 static const struct msm_pinctrl_data echo_data = {
 	.pin_data = {
 		.pin_count = 137,
+		.pin_offsets = echo_pin_offsets,
 		.special_pins_start = 133,
 		.special_pins_data = echo_special_pins_data,
 	},

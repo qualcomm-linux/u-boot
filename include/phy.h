@@ -327,6 +327,7 @@ int phy_startup(struct phy_device *phydev);
 int phy_config(struct phy_device *phydev);
 int phy_shutdown(struct phy_device *phydev);
 int phy_set_supported(struct phy_device *phydev, u32 max_speed);
+int phy_force_clause45(struct phy_device *phydev);
 int phy_modify(struct phy_device *phydev, int devad, int regnum, u16 mask,
 	       u16 set);
 int genphy_config_aneg(struct phy_device *phydev);

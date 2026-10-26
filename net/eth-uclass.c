@@ -347,10 +347,12 @@ int eth_init(void)
 			debug("Trying %s\n", current->name);
 
 			ret = eth_start_udev(current);
-			if (ret < 0)
-				ret = eth_errno;
-			else
+			if (ret < 0) {
+				if (ret == -1 && eth_errno)
+					ret = eth_errno;
+			} else {
 				break;
+			}
 
 			debug("FAIL\n");
 		} else {
@@ -457,8 +459,6 @@ int eth_rx(void)
 		if (ret >= 0 && eth_get_ops(current)->free_pkt)
 			eth_get_ops(current)->free_pkt(current, packet, ret);
 		if (ret <= 0)
-			break;
-		if (!eth_is_active(current))
 			break;
 	}
 	if (ret == -EAGAIN)

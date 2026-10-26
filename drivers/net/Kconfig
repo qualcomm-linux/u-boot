@@ -200,6 +200,18 @@ config DWC_ETH_XGMAC_SOCFPGA
 	  The Synopsys Designware Ethernet XGMAC IP block with specific
 	  configuration used in Intel SoC FPGA chip.
 
+config DWC_ETH_XGMAC_AMBOSELI
+	bool "Synopsys DWC Ethernet XGMAC device support for Amboseli"
+	select DWC_ETH_XGMAC
+	select PHYLIB
+	select PHYLIB_10G
+	select DM_REGULATOR
+	select POWER_DOMAIN
+	help
+	  Qualcomm ETHQOS glue for the Synopsys DWC XGMAC on Amboseli
+	  (SDX95 / QMX101-105). Targets emac0, whose PHY is the Realtek
+	  RTL8261 "Laguna", in USXGMII mode.
+
 config DRIVER_DM9000
 	bool "Davicom DM9000 controller driver"
 	help

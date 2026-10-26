@@ -6,6 +6,7 @@
 /dts-v1/;
 
 #include "echo.dtsi"
+#include "echo-eth.dtsi"
 #include "echo-eth-qmp5.dtsi"
 /* echo-qcn9625.dtsi temporarily removed to isolate a hang during boot -
  * see qmp5_emmc_board_support_implementation.md for the debug trace that

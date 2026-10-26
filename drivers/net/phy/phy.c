@@ -513,6 +513,18 @@ static struct phy_driver *generic_for_phy(struct phy_device *phydev)
 	return ll_entry_get(struct phy_driver, genphy, phy_driver);
 }
 
+int phy_force_clause45(struct phy_device *phydev)
+{
+	if (phydev->is_c45)
+		return 0;
+
+	phydev->is_c45 = true;
+	phydev->mmds = 0;
+	phydev->drv = generic_for_phy(phydev);
+
+	return phy_probe(phydev);
+}
+
 static struct phy_driver *get_phy_driver(struct phy_device *phydev)
 {
 	const int ll_n_ents = ll_entry_count(struct phy_driver, phy_driver);

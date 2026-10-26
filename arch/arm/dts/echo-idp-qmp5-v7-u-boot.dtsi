@@ -99,3 +99,66 @@
 
 	status = "okay";
 };
+
+&emac0 {
+	clocks = <&gcc GCC_EMAC0_AXI_CLK>,
+		 <&gcc GCC_EMAC0_SLV_AHB_CLK>,
+		 <&gcc GCC_EMAC0_PHY_AUX_CLK>,
+		 <&gcc GCC_EMAC0_PTP_CLK>,
+		 <&gcc GCC_EMAC0_RGMII_CLK>,
+		 <&gcc GCC_EMAC0_CC_SGMIIPHY_TX_CLK>,
+		 <&gcc GCC_EMAC0_CC_SGMIIPHY_RX_CLK>,
+		 <&gcc GCC_EMAC0_RPCS_TX_CLK>,
+		 <&gcc GCC_EMAC0_RPCS_RX_CLK>,
+		 <&gcc GCC_EMAC0_XGXS_TX_CLK>,
+		 <&gcc GCC_EMAC0_XGXS_RX_CLK>,
+		 <&gcc GCC_EEE_EMAC0_CLK>,
+		 <&gcc GCC_EMAC0_LOCAL_PTP_CLK>;
+	clock-names = "stmmaceth", "pclk", "phy_aux", "ptp_ref",
+		      "rgmii", "sgmiiphy_tx", "sgmiiphy_rx",
+		      "rpcs_tx", "rpcs_rx", "xgxs_tx", "xgxs_rx",
+		      "eee", "local_ptp";
+
+	/delete-property/ qcom,arm-smmu;
+	/delete-property/ dma-coherent;
+	/delete-property/ iommus;
+	/delete-property/ interrupts;
+	/delete-property/ interrupt-names;
+	pinctrl-0 = <&emac0_mdc_active &emac0_mdio_active>;
+	/delete-property/ pinctrl-1;
+	pinctrl-names = "default";
+	status = "okay";
+	mac-address = [02 00 00 00 00 01];
+
+	/delete-property/ managed;
+	/delete-property/ qcom,disable-rss;
+	/delete-property/ snps,axi-config;
+	/delete-property/ snps,tso;
+	/delete-property/ snps,pbl;
+	/delete-property/ tx-fifo-depth;
+	/delete-property/ rx-fifo-depth;
+	/delete-property/ snps,mtl-rx-config;
+	/delete-property/ snps,mtl-tx-config;
+	/delete-property/ interconnect-names;
+	/delete-property/ interconnects;
+	/delete-property/ operating-points-v2;
+	/delete-property/ resets;
+	/delete-property/ reset-names;
+};
+
+&emac0_phy {
+	/delete-property/ device_type;
+	/delete-property/ interrupts-extended;
+};
+
+&emac1 {
+	status = "disabled";
+};
+
+&pcs1 {
+	status = "disabled";
+};
+
+&serdes1 {
+	status = "disabled";
+};
