@@ -355,7 +355,10 @@ int qcom_spl_soc_qclib_override(struct interface_table *table,
 	uint i;
 	int ret;
 
-	table->global_attributes |= QCLIB_GA_ENABLE_UART_LOGGING;
+	if (gd->flags & GD_FLG_DISABLE_CONSOLE)
+		table->global_attributes &= ~QCLIB_GA_ENABLE_UART_LOGGING;
+	else
+		table->global_attributes |= QCLIB_GA_ENABLE_UART_LOGGING;
 	for (i = 0; i < ARRAY_SIZE(fit_blobs); i++) {
 		ret = qclib_add_iftbl_fit_blob(table, fit, images_node,
 					       fit_blobs[i].name, fit_blobs[i].size);

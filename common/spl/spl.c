@@ -874,6 +874,9 @@ void preloader_console_init(void)
 
 	serial_init();		/* serial communications setup */
 
+	if (gd->flags & GD_FLG_DISABLE_CONSOLE)
+		return;
+
 	gd->flags |= GD_FLG_HAVE_CONSOLE;
 
 #if CONFIG_IS_ENABLED(BANNER_PRINT)
