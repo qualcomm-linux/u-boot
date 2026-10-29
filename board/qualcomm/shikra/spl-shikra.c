@@ -144,10 +144,6 @@ int arm_reserve_mmu(void)
 enum {
 	IPQ_SPL_BOOTCFG_DEV_MMC = 0x0,
 	IPQ_SPL_BOOTCFG_DEV_SD_EMMC	= 0x1,
-	IPQ_SPL_BOOTCFG_DEV_EDL		= 0x2,
-	IPQ_SPL_BOOTCFG_DEV_NAND	= 0x3,
-	IPQ_SPL_BOOTCFG_DEV_EMMC_SD		= 0x4,
-	IPQ_SPL_BOOTCFG_DEV_MAX
 };
 
 #if defined(CONFIG_SPL_BUILD)
@@ -188,32 +184,27 @@ static int shikra_prepare_qup_clocks(void)
 }
 
 /**
- * shikra_prepare_boot_mmc() - Initialize the boot MMC device.
+ * shikra_prepare_mmc() - Initialize the selected MMC boot device.
  *
  * Make the boot MMC device available before loading QUP firmware.
  *
  * Return: 0 on success, or a negative error code.
  */
-static int shikra_prepare_boot_mmc(void)
+static int shikra_prepare_mmc(u32 boot_device)
 {
 	struct udevice *dev;
 	struct mmc *mmc;
-	u8 boot_device_cfg;
 	int seq, ret;
 
-	boot_device_cfg =
-		(readl(IPQ_SPL_BOOTCFG_REG_ADDR) & IPQ_SPL_BOOTCFG_DEV_MASK) >>
-		IPQ_SPL_BOOTCFG_DEV_SHFT;
-
-	switch (boot_device_cfg) {
-	case IPQ_SPL_BOOTCFG_DEV_MMC:
+	switch (boot_device) {
+	case BOOT_DEVICE_MMC1:
 		seq = 0;
 		break;
-	case IPQ_SPL_BOOTCFG_DEV_SD_EMMC:
+	case BOOT_DEVICE_MMC2:
 		seq = 1;
 		break;
 	default:
-		return 0;
+		return -ENODEV;
 	}
 
 	ret = uclass_get_device_by_seq(UCLASS_MMC, seq, &dev);
@@ -225,6 +216,28 @@ static int shikra_prepare_boot_mmc(void)
 		return -ENODEV;
 
 	return mmc_init(mmc);
+}
+
+/**
+ * qcom_spl_prepare_qupfw_media() - Prepare media for QUPFW loading.
+ * @boot_device: U-Boot boot-device identifier.
+ *
+ * Prepare media that must be initialized before QUP firmware loading.
+ * Media without an early-preparation requirement are intentionally left as
+ * placeholders and are handled by their SPL image loader later in the flow.
+ *
+ * Return: 0 on success, or a negative error code.
+ */
+static int qcom_spl_prepare_qupfw_media(u32 boot_device)
+{
+	switch (boot_device) {
+	case BOOT_DEVICE_MMC1:
+	case BOOT_DEVICE_MMC2:
+		return shikra_prepare_mmc(boot_device);
+
+	default:
+		return -EOPNOTSUPP;
+	}
 }
 
 /**
@@ -256,6 +269,7 @@ static void shikra_release_qupfw(void)
 
 void board_init_f(ulong dummy)
 {
+	int boot_device;
 	int ret = 0;
 
 	memset(__bss_start, 0, __bss_end - __bss_start);
@@ -274,9 +288,15 @@ void board_init_f(ulong dummy)
 		goto fail;
 	}
 
-	ret = shikra_prepare_boot_mmc();
+	boot_device = (int)spl_boot_device();
+	if (boot_device < 0) {
+		ret = boot_device;
+		goto fail;
+	}
+
+	ret = qcom_spl_prepare_qupfw_media(boot_device);
 	if (ret) {
-		pr_debug("failed to prepare boot MMC (%d)\n", ret);
+		pr_debug("failed to prepare QUPFW media (%d)\n", ret);
 		goto fail;
 	}
 
@@ -295,7 +315,7 @@ void board_init_f(ulong dummy)
 	enable_caches();
 #endif
 
-	ret = qcom_spl_loader_pre_ddr(spl_boot_device());
+	ret = qcom_spl_loader_pre_ddr(boot_device);
 	if (ret) {
 		pr_debug("qcom_spl_loader_pre_ddr() failed (%d)\n", ret);
 		goto fail;
@@ -416,14 +436,18 @@ int spl_mmc_boot_partition(struct mmc *mmc, const u32 boot_device)
 {
 	struct blk_desc *desc;
 	struct disk_partition info;
-	int partition;
+	int partition, ret;
 
 	if (!IS_ENABLED(CONFIG_MMC))
 		return -ENOSYS;
 
-	desc = blk_get_devnum_by_uclass_id(UCLASS_MMC, 0);
-	if (!desc)
+	if (boot_device != BOOT_DEVICE_MMC1 &&
+	    boot_device != BOOT_DEVICE_MMC2)
 		return -ENODEV;
+
+	ret = qcom_spl_get_boot_blk_desc(&desc);
+	if (ret)
+		return ret;
 
 	partition = part_get_info_by_name(desc, QCOM_SPL_FIT_IMG_PARTITION,
 					  &info);
@@ -436,37 +460,29 @@ int spl_mmc_boot_partition(struct mmc *mmc, const u32 boot_device)
 /**
  * spl_boot_device() - Get the boot device.
  *
- * Return: U-Boot boot device identifier, or -EINVAL if the device is invalid.
+ * Return: U-Boot SPL boot device identifier, or -EINVAL if the device is invalid.
  */
 u32 spl_boot_device(void)
 {
-	u8 boot_device_cfg =
-	(readl(IPQ_SPL_BOOTCFG_REG_ADDR) & IPQ_SPL_BOOTCFG_DEV_MASK) >>
-	IPQ_SPL_BOOTCFG_DEV_SHFT;
-	u32 boot_device_smem;
+	int boot_device;
 
-	switch (boot_device_cfg) {
+	boot_device =
+		(readl(IPQ_SPL_BOOTCFG_REG_ADDR) & IPQ_SPL_BOOTCFG_DEV_MASK) >>
+		IPQ_SPL_BOOTCFG_DEV_SHFT;
+
+	switch (boot_device) {
 	case IPQ_SPL_BOOTCFG_DEV_MMC:
-		boot_device_smem = BOOT_DEVICE_MMC1;
+		boot_device = BOOT_DEVICE_MMC1;
 		printf("Selected boot device: MMC\n");
 		break;
 	case IPQ_SPL_BOOTCFG_DEV_SD_EMMC:
-		boot_device_smem = BOOT_DEVICE_MMC2;
+		boot_device = BOOT_DEVICE_MMC2;
 		printf("Selected boot device: SD MMC\n");
 		break;
-	case IPQ_SPL_BOOTCFG_DEV_EDL:
-		boot_device_smem = BOOT_DEVICE_USB;
-		printf("Selected boot device: SPI-NAND\n");
-		break;
-	case IPQ_SPL_BOOTCFG_DEV_NAND:
-		boot_device_smem = BOOT_DEVICE_NAND;
-		printf("Selected boot device: SPI-NAND\n");
-		break;
 	default:
-		pr_err("Invalid boot device configured: %d\n",
-		       boot_device_cfg);
+		pr_err("Invalid boot device configured\n");
 		return -EINVAL;
 	}
 
-	return boot_device_smem;
+	return boot_device;
 }
