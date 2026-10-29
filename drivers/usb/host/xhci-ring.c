@@ -601,7 +601,14 @@ static void record_transfer_result(struct usb_device *udev,
 
 	switch (GET_COMP_CODE(le32_to_cpu(event->trans_event.transfer_len))) {
 	case COMP_SUCCESS:
-		BUG_ON(udev->act_len != length);
+		/*
+		 * Some controllers report COMP_SUCCESS with a non-zero residual for
+		 * chained transfers. Treat this as a short transfer since act_len
+		 * already accounts for the reported residual by the hardware.
+		 */
+		if (udev->act_len != length)
+			debug("%s: COMP_SUCCESS with residual (act_len=%d, length=%d)\n",
+			      __func__, udev->act_len, length);
 		/* fallthrough */
 	case COMP_SHORT_TX:
 		udev->status = 0;
