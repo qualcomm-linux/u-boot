@@ -206,6 +206,7 @@ static void __noreturn bl31_entry(ulong bl31_entry, ulong bl32_entry,
 	if (!CONFIG_IS_ENABLED(SYS_DCACHE_OFF))
 		dcache_disable();
 
+	printf("Jumping to BL31 at 0x%lx\n", bl31_entry);
 	atf_entry(bl31_params, (void *)fdt_addr);
 }
 
