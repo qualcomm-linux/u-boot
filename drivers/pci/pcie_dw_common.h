@@ -48,6 +48,8 @@
 
 /* Register address builder */
 #define PCIE_GET_ATU_OUTB_UNR_REG_OFFSET(region)	((region) << 9)
+/* Inbound iATU region n is at outbound offset | 0x100 */
+#define PCIE_GET_ATU_INB_UNR_REG_OFFSET(region)	(((region) << 9) | 0x100)
 
 /* Parameters for the waiting for iATU enabled routine */
 #define LINK_WAIT_MAX_IATU_RETRIES	5
@@ -141,6 +143,27 @@ void dw_pcie_link_set_max_link_width(struct pcie_dw *pci, u32 num_lanes);
 
 int pcie_dw_prog_outbound_atu_unroll(struct pcie_dw *pci, int index, int type, u64 cpu_addr,
 				     u64 pci_addr, u32 size);
+
+/**
+ * pcie_dw_prog_inbound_atu_unroll() - Configure inbound ATU window
+ *
+ * @pci:      Pointer to the PCI controller state
+ * @index:    ATU region index
+ * @type:     ATU access type (PCIE_ATU_TYPE_MEM for memory)
+ * @pci_addr: PCIe bus address (what the endpoint sends as the DMA address)
+ * @cpu_addr: AXI/host address to translate to
+ * @size:     Size of the translation window in bytes
+ *
+ * Configure an inbound ATU window so that DMA reads/writes from PCIe
+ * endpoints to host memory are forwarded to the AXI fabric. Without at
+ * least one enabled inbound window covering the endpoint's DMA address
+ * range, the RC drops incoming Memory Read/Write TLPs silently, which
+ * shows up as a Completion Timeout at the requester.
+ *
+ * Return: 0 on success, -1 on timeout waiting for enable
+ */
+int pcie_dw_prog_inbound_atu_unroll(struct pcie_dw *pci, int index, int type,
+				    u64 pci_addr, u64 cpu_addr, u64 size);
 
 int pcie_dw_read_config(const struct udevice *bus, pci_dev_t bdf, uint offset, ulong *valuep,
 			enum pci_size_t size);

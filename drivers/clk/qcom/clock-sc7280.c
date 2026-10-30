@@ -206,6 +206,12 @@ static const struct gate_clk sc7280_clks[] = {
 	GATE_CLK_POLLED(GCC_PCIE_CLKREF_EN, 0x8c004, BIT(0), 0x8c004),
 
 	GATE_CLK(GCC_PCIE_1_PIPE_CLK, 0x52000, BIT(30)),
+	/*
+	 * No-op gate: actual mux config is done by clk_phy_mux_enable()
+	 * when GCC_PCIE_1_PIPE_CLK is enabled. Same pattern as
+	 * GCC_PCIE_0/1_PIPE_CLK_SRC on sm8550/sm8650.
+	 */
+	GATE_CLK(GCC_PCIE_1_PIPE_CLK_SRC, PCIE_1_PIPE_CLK_PHY_MUX, 0),
 	GATE_CLK(GCC_PCIE_1_AUX_CLK, 0x52000, BIT(29)),
 	GATE_CLK(GCC_PCIE_1_CFG_AHB_CLK, 0x52000, BIT(28)),
 	GATE_CLK(GCC_PCIE_1_MSTR_AXI_CLK, 0x52000, BIT(27)),

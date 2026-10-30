@@ -13,10 +13,13 @@
 #include <asm/io.h>
 #include <asm-generic/gpio.h>
 #include <dm/device_compat.h>
+#include <dm/devres.h>
 #include <linux/iopoll.h>
 #include <linux/delay.h>
 #include <linux/log2.h>
 #include <linux/bitfield.h>
+#include <linux/kernel.h>
+#include <linux/sizes.h>
 
 #include "pcie_dw_common.h"
 
@@ -57,6 +60,12 @@ struct qcom_pcie {
 #define PARF_SID_OFFSET				0x234
 #define PARF_BDF_TRANSLATE_CFG			0x24c
 #define PARF_SLV_ADDR_SPACE_SIZE		0x358
+#define PARF_DBI_BASE_ADDR_V2			0x350
+#define PARF_DBI_BASE_ADDR_V2_HI		0x354
+#define PARF_SLV_ADDR_SPACE_SIZE_V2		0x358
+#define PARF_SLV_ADDR_SPACE_SIZE_V2_HI		0x35c
+#define PARF_ATU_BASE_ADDR			0x634
+#define PARF_ATU_BASE_ADDR_HI			0x638
 #define PARF_DEVICE_TYPE			0x1000
 #define PARF_BDF_TO_SID_TABLE_N			0x2000
 
@@ -112,6 +121,9 @@ struct qcom_pcie {
 
 /* PARF_SLV_ADDR_SPACE_SIZE register value */
 #define SLV_ADDR_SPACE_SZ			0x10000000
+
+/* PARF_SLV_ADDR_SPACE_SIZE_V2/_HI register value (64-bit pair, matches Linux) */
+#define SLV_ADDR_SPACE_SZ_V2_HI			0x80000000
 
 /* PARF_MHI_CLOCK_RESET_CTRL register fields */
 #define AHB_CLK_EN				BIT(0)
@@ -348,6 +360,19 @@ static int qcom_pcie_init_port(struct udevice *dev)
 	/* change DBI base address */
 	writel(0, priv->parf + PARF_DBI_BASE_ADDR);
 
+	/* Tell the RC where its DBI/ATU blocks live, and size the slave address space */
+	{
+		u64 dbi_phys = (u64)(uintptr_t)priv->dw.dbi_base;
+		u64 atu_phys = (u64)(uintptr_t)priv->dw.atu_base;
+
+		writel(lower_32_bits(dbi_phys), priv->parf + PARF_DBI_BASE_ADDR_V2);
+		writel(upper_32_bits(dbi_phys), priv->parf + PARF_DBI_BASE_ADDR_V2_HI);
+		writel(lower_32_bits(atu_phys), priv->parf + PARF_ATU_BASE_ADDR);
+		writel(upper_32_bits(atu_phys), priv->parf + PARF_ATU_BASE_ADDR_HI);
+		writel(0x0, priv->parf + PARF_SLV_ADDR_SPACE_SIZE_V2);
+		writel(SLV_ADDR_SPACE_SZ_V2_HI, priv->parf + PARF_SLV_ADDR_SPACE_SIZE_V2_HI);
+	}
+
 	/* MAC PHY_POWERDOWN MUX DISABLE  */
 	val = readl(priv->parf + PARF_SYS_CTRL);
 	val &= ~MAC_PHY_POWERDOWN_IN_P2_D_MUX_EN;
@@ -450,8 +475,48 @@ static int qcom_pcie_parse_dt(struct udevice *dev)
 
 	ret = clk_get_bulk(dev, &priv->clks);
 	if (ret) {
-		dev_err(dev, "failed to get clocks (%d)\n", ret);
-		return ret;
+		/*
+		 * clk_get_bulk() aborts on the first unresolved clock (e.g.
+		 * a not-yet-registered PHY pipe clock), dropping clocks
+		 * fetched earlier too. Fall back to fetching one at a time,
+		 * skipping ones not yet available (-ENODEV/-ENOENT), which
+		 * are expected to be enabled by their own provider later.
+		 */
+		int count = dev_count_phandle_with_args(dev, "clocks",
+							"#clock-cells", 0);
+		int idx;
+
+		priv->clks.count = 0;
+		if (count > 0) {
+			priv->clks.clks = devm_kcalloc(dev, count,
+						       sizeof(struct clk),
+						       GFP_KERNEL);
+			if (!priv->clks.clks)
+				return -ENOMEM;
+
+			for (idx = 0; idx < count; idx++) {
+				ret = clk_get_by_index(dev, idx,
+						       &priv->clks.clks[priv->clks.count]);
+				if (!ret) {
+					priv->clks.count++;
+				} else if (ret != -ENODEV && ret != -ENOENT) {
+					dev_err(dev, "failed to get clock %d (%d)\n",
+						idx, ret);
+					return ret;
+				}
+			}
+		}
+	}
+
+	/* Ensure the power domain is on before any PARF register access */
+	{
+		struct power_domain pd;
+
+		if (!power_domain_get_by_index(dev, &pd, 0)) {
+			ret = power_domain_on(&pd);
+			if (ret && ret != -ENOSYS)
+				dev_warn(dev, "failed to enable power domain (%d)\n", ret);
+		}
 	}
 
 	ret = generic_phy_get_by_index(dev, 0, &priv->phy);
@@ -489,6 +554,9 @@ static int qcom_pcie_probe(struct udevice *dev)
 	priv->dw.first_busno = dev_seq(dev);
 	priv->dw.dev = dev;
 
+	/* Wire up the per-SoC ops so qcom_pcie_init_port() can call config_sid() */
+	priv->ops = (struct qcom_pcie_ops *)dev_get_driver_data(dev);
+
 	ret = qcom_pcie_parse_dt(dev);
 	if (ret)
 		return ret;
@@ -507,12 +575,38 @@ static int qcom_pcie_probe(struct udevice *dev)
 	else
 		printf("PCIE-%d: Link up timeout\n", dev_seq(dev));
 
-	return pcie_dw_prog_outbound_atu_unroll(&priv->dw,
-						PCIE_ATU_REGION_INDEX0,
-						PCIE_ATU_TYPE_MEM,
-						priv->dw.mem.phys_start,
-						priv->dw.mem.bus_start,
-						priv->dw.mem.size);
+	ret = pcie_dw_prog_outbound_atu_unroll(&priv->dw,
+					       PCIE_ATU_REGION_INDEX0,
+					       PCIE_ATU_TYPE_MEM,
+					       priv->dw.mem.phys_start,
+					       priv->dw.mem.bus_start,
+					       priv->dw.mem.size);
+	if (ret)
+		return ret;
+
+	/* Size the inbound window from "dma-ranges" so PCIe endpoints can DMA to host memory */
+	{
+		phys_addr_t cpu_addr;
+		dma_addr_t bus_addr;
+		u64 size;
+
+		ret = dev_get_dma_range(dev, &cpu_addr, &bus_addr, &size);
+		if (ret) {
+			dev_warn(dev, "no dma-ranges found, assuming identity map over 4GB\n");
+			cpu_addr = 0;
+			bus_addr = 0;
+			size = SZ_4G;
+		}
+
+		ret = pcie_dw_prog_inbound_atu_unroll(&priv->dw,
+						      PCIE_ATU_REGION_INDEX0,
+						      PCIE_ATU_TYPE_MEM,
+						      bus_addr, cpu_addr, size);
+		if (ret)
+			dev_warn(dev, "failed to configure inbound iATU (%d)\n", ret);
+	}
+
+	return 0;
 }
 
 static const struct dm_pci_ops qcom_pcie_ops = {
