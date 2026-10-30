@@ -41,8 +41,10 @@
 };
 
 &sdhc_2 {
+	resets = <&gcc GCC_SDCC2_BCR>;
 	vmmc-supply = <&pm8150_l10>;
 	vqmmc-supply = <&pm8150_l2>;
+	max-frequency = <100000000>;
 
 	no-sdio;
 	no-mmc;
