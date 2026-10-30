@@ -14,6 +14,9 @@ CONFIG_ARM=y
 
 CONFIG_DEFAULT_DEVICE_TREE="echo-idp-qmp5-v7"
 
+# default.env plus button_cmd for Vol-Down/Alpaca "Boot to fastboot"
+CONFIG_ENV_DEFAULT_ENV_TEXT_FILE="board/qualcomm/echo.env"
+
 # Address where U-Boot will be loaded
 CONFIG_TEXT_BASE=0x83E00000
 CONFIG_REMAKE_ELF=y

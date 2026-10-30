@@ -176,4 +176,16 @@
 
 &serdes1 {
 	status = "disabled";
+
+/*
+ * echo.dtsi enables the PON keys with status = "ok", which Linux accepts
+ * but U-Boot does not (only "okay" counts as enabled), so the pwrkey/resin
+ * button devices were never bound and Vol-Down (button_cmd_0) never worked.
+ */
+&pon_pwrkey {
+	status = "okay";
+};
+
+&pon_resin {
+	status = "okay";
 };
