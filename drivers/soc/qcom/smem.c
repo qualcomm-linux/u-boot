@@ -1008,7 +1008,7 @@ int qcom_socinfo_init(void)
 	}
 
 	if (offsetof(struct socinfo, serial_num) + sizeof(info->serial_num) <= item_size) {
-		snprintf(buf, sizeof(buf), "%u", le32_to_cpu(info->serial_num));
+		snprintf(buf, sizeof(buf), "%x", le32_to_cpu(info->serial_num));
 		env_set("serial#", buf);
 	} else {
 		return -ENOENT;
