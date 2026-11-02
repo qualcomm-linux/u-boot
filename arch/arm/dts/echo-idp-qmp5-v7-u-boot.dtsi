@@ -176,6 +176,7 @@
 
 &serdes1 {
 	status = "disabled";
+};
 
 /*
  * echo.dtsi enables the PON keys with status = "ok", which Linux accepts
