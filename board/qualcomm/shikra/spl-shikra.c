@@ -363,13 +363,13 @@ int qcom_spl_soc_qclib_override(struct interface_table *table,
 			return ret;
 	}
 
-	if (IS_ENABLED(CONFIG_QCOM_DDR_TRAINING_SUPPORTED)) {
+#if IS_ENABLED(CONFIG_QCOM_DDR_TRAINING_SUPPORTED)
 		ret = qclib_add_iftbl_entry(table, SHIKRA_DDR_TRAINING_DATA,
 					    CONFIG_QCOM_SPL_BOOTIMEM_DDR_TRAINING_BASE,
 					    CONFIG_QCOM_SPL_BOOTIMEM_DDR_TRAINING_SIZE);
 		if (ret)
 			return ret;
-	}
+#endif
 
 	ret = qclib_add_iftbl_entry(table, SHIKRA_DDR_INFORMATION, 0, 0);
 	if (ret)
