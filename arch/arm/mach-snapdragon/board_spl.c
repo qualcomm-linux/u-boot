@@ -44,6 +44,7 @@ void __weak qcom_spl_soc_rpm_reset(void)
 {
 }
 
+#if (IS_ENABLED(CONFIG_QCOM_SPL_CDT_SUPPORTED))
 /**
  * qcom_spl_cdt_load() - Load the CDT from the boot medium.
  *
@@ -135,7 +136,7 @@ restore_hwpart:
 
 	return ret;
 }
-
+#endif
 
 /**
  * qcom_spl_get_boot_blk_desc() - Get the boot medium's block device.

@@ -65,7 +65,7 @@ config QCOM_HWDETECT
 
 config QCOM_SPL_CDT_SUPPORTED
 	bool "Enable CDT support in SPL"
-	depends on SPL
+	depends on SPL && (SPL_PARTITIONS || SPL_PARTITION_TYPE_GUID)
 	help
 	  Enable support for reading the CDT off the boot medium during
 	  SPL and staging it in IMEM, so that QCLIB can pick it up via
