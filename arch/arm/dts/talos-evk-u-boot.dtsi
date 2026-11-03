@@ -107,3 +107,13 @@
 		mode-edl = <0x80000000 0x00000001>;
 	};
 };
+
+/*
+ * Hold the UART RX pad (gpio17) at idle-HIGH with an internal pull-up. A UART
+ * RX line idles HIGH (mark); with no bias the pad floats when the debug cable
+ * is disconnected, and the armed GENI RX sequencer clocks in a junk word.
+ */
+&qup_uart0_rx {
+	bias-pull-up;
+};
+
