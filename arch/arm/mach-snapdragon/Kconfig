@@ -138,7 +138,7 @@ endif # QCOM_SPL_CDT_SUPPORTED
 
 config QCOM_DDR_TRAINING_SUPPORTED
 	bool "Enable DDR training data save/restore support in SPL"
-	depends on SPL
+	depends on SPL && (SPL_PARTITIONS || SPL_PARTITION_TYPE_GUID)
 	help
 	  Enable support for saving and restoring QCLIB's DDR training data
 	  to/from a dedicated storage partition during the SPL boot flow.
@@ -180,6 +180,7 @@ config QCOM_DDR_TRAINING_PARTITION_NAME
 config QCOM_DDR_TRAINING_PARTITION_GUID
 	string "DDR training GPT partition type GUID"
 	depends on QCOM_DDR_TRAINING_USE_PARTITION_GUID
+	default "20a0c19c-286a-42fa-9ce7-f64c3226a794"
 	help
 	  GPT partition type GUID identifying the partition on the boot
 	  medium used to persist DDR training data across boots. Locates

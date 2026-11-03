@@ -177,6 +177,7 @@ int qcom_spl_get_boot_blk_desc(struct blk_desc **descp)
 	return 0;
 }
 
+#if (IS_ENABLED(CONFIG_QCOM_DDR_TRAINING_SUPPORTED))
 /**
  * qcom_spl_ddr_training_restore() - Restore the DDR training data from the boot
  * medium.
@@ -302,6 +303,7 @@ int qcom_spl_ddr_training_save(u64 address, u32 size)
 
 	return 0;
 }
+#endif /*CONFIG_QCOM_DDR_TRAINING_SUPPORTED) */
 
 #if IS_ENABLED(CONFIG_SPL_SMEM)
 /**
