@@ -527,9 +527,6 @@ void sdhci_set_uhs_timing(struct sdhci_host *host)
 		reg |= SDHCI_CTRL_UHS_SDR25;
 		break;
 	case UHS_SDR50:
-	case MMC_HS_52:
-		reg |= SDHCI_CTRL_UHS_SDR50;
-		break;
 	case UHS_DDR50:
 	case MMC_DDR_52:
 		reg |= SDHCI_CTRL_UHS_DDR50;
