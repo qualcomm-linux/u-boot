@@ -819,6 +819,19 @@ static void sdhci_msm_set_control_reg(struct sdhci_host *host)
 		sdhci_writew(host, ctrl2, SDHCI_HOST_CONTROL2);
 	} else {
 		sdhci_set_uhs_timing(host);
+
+		/*
+		 * The generic code maps MMC_HS_52 to SDR50, which makes CMD/DATA
+		 * time out on the HS200 -> HS step of HS400 bring-up.
+		 * Use SDR25 instead.
+		 */
+		if (mmc->selected_mode == MMC_HS_52) {
+			u32 ctrl2 = sdhci_readw(host, SDHCI_HOST_CONTROL2);
+
+			ctrl2 &= ~SDHCI_CTRL_UHS_MASK;
+			ctrl2 |= SDHCI_CTRL_UHS_SDR25;
+			sdhci_writew(host, ctrl2, SDHCI_HOST_CONTROL2);
+		}
 	}
 
 	sdhci_msm_hc_select_mode(host);
