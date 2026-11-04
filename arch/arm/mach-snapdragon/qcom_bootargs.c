@@ -172,29 +172,30 @@ static int qcom_bootdevice_cmdline_arg(char *out, size_t outlen)
 }
 
 /*
- * Match ABL's BoardSerialNum(): for an eMMC root device the serial is the
- * CID product serial number (PSN, CID bits 47:16) printed as lowercase hex.
- * serial# is only a fallback (no eMMC): it holds either the SMEM chip serial
- * (lowercase hex, set by qcom_socinfo_init()) or a value relayed from a previous
- * stage's androidboot.serialno= by qcom_set_serialno() (arch/arm/mach-snapdragon/
- * board.c).
+ * serial# may already be set by qcom_set_serialno() (arch/arm/mach-snapdragon/
+ * board.c), which relays androidboot.serialno= out of a previous-stage
+ * bootloader's /chosen/bootargs when qcom_boot_source == QCOM_BOOT_SOURCE_ANDROID.
+ * When U-Boot is the first-stage bootloader (QCOM_BOOT_SOURCE_XBL) there is no
+ * previous cmdline to relay, so fall back to the eMMC CID product serial
+ * number, the same source used by board/qualcomm/dragonboard410c.
  */
 static void qcom_serialno_cmdline_arg(char *out, size_t outlen)
 {
-	const char *serial;
+	const char *serial = env_get("serial#");
 	struct mmc *mmc;
 
-	mmc = find_mmc_device(QCOM_BOOTARGS_MMC_DEV);
-	if (mmc && mmc->has_init) {
-		snprintf(out, outlen, "%x", mmc->cid[2] << 16 | mmc->cid[3] >> 16);
+	if (serial && *serial) {
+		snprintf(out, outlen, "%s", serial);
 		return;
 	}
 
-	serial = env_get("serial#");
-	if (serial && *serial)
-		snprintf(out, outlen, "%s", serial);
-	else
-		*out = '\0';
+	*out = '\0';
+
+	mmc = find_mmc_device(QCOM_BOOTARGS_MMC_DEV);
+	if (!mmc || !mmc->has_init)
+		return;
+
+	snprintf(out, outlen, "%08x", mmc->cid[2] << 16 | mmc->cid[3] >> 16);
 }
 
 /*
