@@ -16,7 +16,7 @@ u-boot.mbn: u-boot.bin FORCE
 ifeq ($(CONFIG_QCOM_GENERATE_MBN),y)
 
 quiet_cmd_mksplmbn = SPLMBN     $@
-      cmd_mksplmbn = $(CMD_MKMBN) -o spl/u-boot-spl.mbn -l $(CONFIG_SPL_TEXT_BASE) $<
+      cmd_mksplmbn = $(CMD_MKMBN) -o spl/u-boot-spl.mbn -l $(CONFIG_SPL_TEXT_BASE) -s $<
 
 INPUTS-$(CONFIG_SPL) += spl/u-boot-spl.mbn
 

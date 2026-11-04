@@ -58,9 +58,14 @@ class SwId(Enum):
 class MbnData:
 
     # sw_id 0x9 is aboot/uefi, the most common
-    def __init__(self, version: int, sw_id: SwId = SwId.aboot):
+    def __init__(
+            self,
+            version: int,
+            sw_id: SwId = SwId.aboot,
+            spl_sw_id: SwId|None = None):
         self.version = version
         self.sw_id = sw_id
+        self.spl_sw_id = spl_sw_id if spl_sw_id is not None else sw_id
 
 
 """
@@ -87,6 +92,7 @@ boards: dict[bytes, MbnData] = {
     b"qcom,ipq5210\0": MbnData(7, SwId.aboot),
     b"qcom,ipq5424\0": MbnData(7, SwId.aboot),
     b"qcom,ipq9574\0": MbnData(6, SwId.aboot),
+    b"qcom,nord\0": MbnData(7, SwId.uefi, SwId.tz),  # Dragonwing IQ10
 
     # msm8916/apq8016 has an "aboot" partition but the process is the same
     # They use header version 3.
@@ -102,6 +108,10 @@ parser = argparse.ArgumentParser(
 parser.register("type", "hex", lambda s: int(s, 16))
 parser.add_argument(
     "-l", "--load", type=lambda x: int(x, 0), default=0, help="Load address"
+)
+parser.add_argument(
+    "-s", "--spl", action="store_true", default=False,
+    help="Use SPL defaults from board metadata"
 )
 parser.add_argument(
     "-o", "--output", type=Path, default="u-boot.mbn", help="Output file"
@@ -170,6 +180,8 @@ if not mbn:
     args.output.unlink(missing_ok=True)
     exit(1)
 
+sw_id = mbn.spl_sw_id.value if args.spl else mbn.sw_id.value
+
 if args.load == 0:
     error(
         "Cannot proceed without load address.\n"
@@ -177,6 +189,7 @@ if args.load == 0:
     exit(1)
 
 log(f"Detected board {match.decode('UTF-8')} with load address {args.load:#x}")
+log(f"Using MBN version {mbn.version} and SWID {sw_id:#x}")
 
 data += b'\x00' * (-len(data) % MBN_ALIGN_SIZE)
 
@@ -185,7 +198,7 @@ elf.ehdr.e_entry = args.load
 elf.update()
 
 # QLI boards use v6 sw_id is "aboot"
-hashseg.generate(elf, mbn.version, mbn.sw_id.value)
+hashseg.generate(elf, mbn.version, sw_id)
 # print(f"after: {elf}")
 
 with open(args.output, "wb") as f:
