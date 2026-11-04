@@ -42,3 +42,13 @@
 		mode-edl = <0x80000000 0x00000001>;
 	};
 };
+
+&vdd_ntn_0p9 {
+	regulator-boot-on;
+	regulator-always-on;
+};
+
+&vdd_ntn_1p8 {
+	regulator-boot-on;
+	regulator-always-on;
+};
