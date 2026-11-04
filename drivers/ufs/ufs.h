@@ -842,5 +842,7 @@ static inline void ufshcd_rmwl(struct ufs_hba *hba, u32 mask, u32 val, u32 reg)
 }
 
 int ufshcd_probe(struct udevice *dev, struct ufs_hba_ops *hba_ops);
+void ufshcd_cache_flush(void *addr, unsigned long size);
+void ufshcd_cache_invalidate(void *addr, unsigned long size);
 
 #endif
