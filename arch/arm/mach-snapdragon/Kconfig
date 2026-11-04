@@ -203,6 +203,15 @@ config QCOM_SPL_BOOTIMEM_DDR_TRAINING_SIZE
 
 endif # QCOM_DDR_TRAINING_SUPPORTED
 
+config QCS6490_PCIE_INIT
+	bool "QCS6490 RB3 Gen2 PCIe1 power/reset sequencing"
+	depends on DM_GPIO
+	help
+	  Drive the PCIe1 downstream power-enable and reset GPIOs for the
+	  QPS615 PCIe switch and Renesas uPD720201 xHCI controller on
+	  QCS6490/RB3 Gen2 during board init. This overrides the weak
+	  qcom_board_init() in QCS6490.
+
 config QCOM_BOOT0_SNAGBOOT_MODE
 	bool "boot0.h initialization for Snagboot mode"
 	help

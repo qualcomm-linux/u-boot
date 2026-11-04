@@ -12,6 +12,7 @@ obj-y += pbl-shared-data.o
 obj-y += qclib.o
 else
 obj-y += board.o
+obj-$(CONFIG_QCS6490_PCIE_INIT) += qcs6490_pcie_init.o
 obj-$(CONFIG_EFI_HAVE_CAPSULE_SUPPORT) += capsule_update.o
 endif
 
