@@ -1,0 +1,16 @@
+U-Boot UFS Multi-Circular Queue (MCQ) opt-in property
+
+"enable-mcq" is a boolean property on a UFS host controller node,
+read with dev_read_bool() in drivers/ufs/ufs-uclass.c.
+
+This is a U-Boot-only property, not part of the upstream Linux kernel
+devicetree bindings (dts/upstream/Bindings/ufs/*.yaml) - Linux selects
+MCQ via the "use_mcq_mode" module parameter instead, not devicetree.
+It is not expected to be synced from, or contributed back to, the
+kernel bindings.
+
+When present on a controller that also advertises MASK_MCQ_SUPPORT
+and has vendor glue for the mcq_config_resource hba_ops hook, the UFS
+core driver uses UFSHCI 4.0 Multi-Circular Queue mode instead of the
+legacy Single Doorbell (SDB) path. Omit the property, or leave it on
+a controller without MCQ support, to keep using SDB.
