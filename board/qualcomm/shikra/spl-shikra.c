@@ -119,12 +119,14 @@ int arm_reserve_mmu(void)
 #define SHIKRA_DCB_LP4			"dcb_lp4"
 #define SHIKRA_DCB_LP5			"dcb_lp5"
 #define SHIKRA_ECC			"ecc"
+#define SHIKRA_FDT_QCLIB		"fdt-qclib"
 
 #define SHIKRA_PMIC_COCOS_SIZE		0xbc00
 #define SHIKRA_PMIC_WAILUA_SIZE	0x6000
 #define SHIKRA_DCB_LP4_SIZE		0x4800
 #define SHIKRA_DCB_LP5_SIZE		0x4800
 #define SHIKRA_ECC_SIZE			0x400
+#define SHIKRA_FDT_QCLIB_SIZE		0x1b2
 
 #define SHIKRA_SHRM2_SPROC_CTRL_ADDR			0x0c36000
 #define SHIKRA_SHRM2_SPROC_CTRL_CORE_SW_RESET_BMSK	BIT(1)
@@ -351,6 +353,7 @@ int qcom_spl_soc_qclib_override(struct interface_table *table,
 		{ SHIKRA_DCB_LP4, SHIKRA_DCB_LP4_SIZE },
 		{ SHIKRA_DCB_LP5, SHIKRA_DCB_LP5_SIZE },
 		{ SHIKRA_ECC, SHIKRA_ECC_SIZE },
+		{ SHIKRA_FDT_QCLIB, SHIKRA_FDT_QCLIB_SIZE },
 	};
 	uint i;
 	int ret;
