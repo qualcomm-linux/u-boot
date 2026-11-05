@@ -203,23 +203,6 @@ config QCOM_SPL_BOOTIMEM_DDR_TRAINING_SIZE
 
 endif # QCOM_DDR_TRAINING_SUPPORTED
 
-choice
-	prompt "Qualcomm boot0.h workaround"
-	optional
-	help
-	  While U-Boot on Qualcomm platforms doesn't generally need compile-time
-	  adjustments based on the target SoC, workarounds in boot0.h can't
-	  practically detect the SoC at runtime. Enable one of these workarounds
-	  if you know you need it.
-
-config BOOT0_MSM8916_PSCI_WORKAROUND
-	bool "boot0.h workaround for buggy PSCI on the msm8916 SoC"
-	help
-	  Select this if you are building U-Boot proper for an msm8916 board that
-	  uses the buggy PSCI implementation.
-
-endchoice
-
 config QCOM_BOOT0_SNAGBOOT_MODE
 	bool "boot0.h initialization for Snagboot mode"
 	help
