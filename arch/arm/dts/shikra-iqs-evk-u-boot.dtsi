@@ -53,6 +53,29 @@
 	bootph-all;
 };
 
+&sdc2_default {
+	bootph-all;
+	clk-pins { bootph-all; };
+	cmd-pins { bootph-all; };
+	data-pins { bootph-all; };
+};
+
+&sdc2_sleep {
+	bootph-all;
+	clk-pins { bootph-all; };
+	cmd-pins { bootph-all; };
+	data-pins { bootph-all; };
+};
+
+&sdc2_card_det_n { bootph-all; };
+&sdhc_2 {
+	bootph-all;
+	resets = <&gcc GCC_SDCC2_BCR>;
+	max-frequency = <100000000>;
+};
+&pm8150_l10 { bootph-all; };
+&pm8150_l2 { bootph-all; };
+
 &qupv3_0 {
 	bootph-all;
 };
