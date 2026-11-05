@@ -274,8 +274,7 @@ static int msm_gpio_of_to_plat(struct udevice *dev)
 
 	/* Get the pin count from the pinctrl driver */
 	uc_priv->gpio_count = pin_data->pin_count;
-	uc_priv->bank_name = fdt_getprop(gd->fdt_blob, dev_of_offset(dev),
-					 "gpio-bank-name", NULL);
+	uc_priv->bank_name = dev_read_string(dev, "gpio-bank-name");
 	if (uc_priv->bank_name == NULL)
 		uc_priv->bank_name = "soc";
 
