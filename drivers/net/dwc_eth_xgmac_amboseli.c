@@ -4,7 +4,7 @@
  *
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
- * Target: emac0, USXGMII at 10G, on QMP5 V1.
+ * Target: emac0 on QMP5 V1, with USXGMII, USX5G, SGMII, and 2500BASE-X modes.
  *
  * emac0 was chosen because it is the port actually enabled on the lab board:
  * reading the live device tree over adb shows emac0 status=okay with
@@ -90,6 +90,8 @@
 #include "dwc_eth_xgmac.h"
 #include "serdes_fe11lm_v1_3_seq.h"
 #include "wrapper_usxgmii_tbl.h"
+#include "wrapper_usx5g_tbl.h"
+#include "wrapper_sgmii_tbl.h"
 #include "pcs_xpcs_qcom_amboseli.h"
 
 /* SerDes reference clock enable, TCSR_ETH_0_CLKREF_EN. */
@@ -108,7 +110,13 @@
 #define SDCC_HC_REG_DLL_CONFIG2			0x010
 #define SDCC_USR_CTL				0x018
 #define RGMII_IO_MACRO_CONFIG2			0x01C
+#define RGMII_CONFIG2_MODE_EN_VIA_GMII		BIT(21)
+#define RGMII_CONFIG2_MAX_SPD_PRG_3		GENMASK(20, 17)
+#define RGMII_CONFIG2_RGMII_CLK_SEL_CFG		BIT(16)
 #define RGMII_IO_MACRO_SCRATCH_2		0x044
+#define RGMII_SCRATCH2_MAX_SPD_PRG_4		GENMASK(5, 2)
+#define RGMII_SCRATCH2_MAX_SPD_PRG_5		GENMASK(9, 6)
+#define RGMII_SCRATCH2_MAX_SPD_PRG_6		GENMASK(13, 10)
 #define RGMII_IO_MACRO_BYPASS			0x16C
 #define SDC4_STATUS				0x014
 #define SDC4_STATUS_DLL_LOCK			BIT(7)
@@ -122,6 +130,10 @@
 #define RGMII_CONFIG_FUNC_CLK_EN			BIT(30)
 #define SGMII_PHY_CNTRL1_SGMII_TX_TO_RX_LOOPBACK_EN	BIT(3)
 #define SGMII_PHY_CNTRL1_USXGMII_GMII_MASTER_CLK_MUX_SEL BIT(4)
+#define SGMII_PHY_CNTRL1_RGMII_SGMII_CLK_MUX_SEL	BIT(0)
+#define SGMII_PHY_CNTRL0_2P5G_1G_CLK_SEL		GENMASK(6, 5)
+#define RGMII_CONFIG_MAX_SPD_PRG_2_V4		GENMASK(9, 6)
+#define RGMII_CONFIG_MAX_SPD_PRG_9_V4		GENMASK(18, 10)
 
 /* Linux writes them too in this mode - ethqos_configure_echo() only skips DLL registers when mode == MAC_MODE_RGMII (:1598-1600), which is not our case. */
 
@@ -178,7 +190,43 @@ struct xgmac_amboseli_priv {
 	void __iomem *pcs;
 	/* Set by the pcs_link_up op and consumed by fix_mac_speed, which runs later and would otherwise only have gen10g_startup()'s hardcoded SPEED_10000 to go on. */
 	int xpcs_speed;
+	int xpcs_duplex;
 };
+
+static const char *xgmac_amboseli_mode_name(phy_interface_t interface)
+{
+	switch (interface) {
+	case PHY_INTERFACE_MODE_SGMII:
+		return "SGMII";
+	case PHY_INTERFACE_MODE_2500BASEX:
+		return "2500BASE-X";
+	case PHY_INTERFACE_MODE_5GBASER:
+		return "5GBASE-R/USX5G";
+	case PHY_INTERFACE_MODE_USXGMII:
+	default:
+		return "USXGMII";
+	}
+}
+
+static const struct amboseli_wrapper_reg *
+xgmac_amboseli_wrapper_table(phy_interface_t interface, size_t *count)
+{
+	switch (interface) {
+	case PHY_INTERFACE_MODE_SGMII:
+		*count = ARRAY_SIZE(amboseli_wrapper_sgmii);
+		return amboseli_wrapper_sgmii;
+	case PHY_INTERFACE_MODE_2500BASEX:
+		*count = ARRAY_SIZE(amboseli_wrapper_2500basex);
+		return amboseli_wrapper_2500basex;
+	case PHY_INTERFACE_MODE_5GBASER:
+		*count = ARRAY_SIZE(amboseli_wrapper_usx5g);
+		return amboseli_wrapper_usx5g;
+	case PHY_INTERFACE_MODE_USXGMII:
+	default:
+		*count = ARRAY_SIZE(amboseli_wrapper_usxgmii);
+		return amboseli_wrapper_usxgmii;
+	}
+}
 
 /* echo-eth-qmp5.dtsi:57-65 gives. */
 static int xgmac_amboseli_reset_phy(struct udevice *dev)
@@ -544,6 +592,62 @@ static void xgmac_amboseli_set_func_clk_en(void __iomem *rgmii)
 	setbits_le32(rgmii + RGMII_IO_MACRO_CONFIG, RGMII_CONFIG_FUNC_CLK_EN);
 }
 
+static void xgmac_amboseli_wrapper_update(struct xgmac_amboseli_priv *priv,
+						 u32 offset, u32 mask, u32 value)
+{
+	u32 want = readl(priv->rgmii + offset);
+	u32 val;
+
+	want = (want & ~mask) | (value & mask);
+	wrapper_mark("mode config", offset);
+	writel(want, priv->rgmii + offset);
+	val = readl(priv->rgmii + offset);
+	if (eth_verbose_on() || val != want)
+		eth_trace("wrapper: mode +0x%03x <- 0x%08x, reads 0x%08x%s\n",
+			  offset, want, val,
+			  val == want ? "" : "  MISMATCH");
+}
+
+static void xgmac_amboseli_configure_usx5g_wrapper(
+						struct xgmac_amboseli_priv *priv)
+{
+	xgmac_amboseli_set_func_clk_en(priv->rgmii);
+
+	xgmac_amboseli_wrapper_update(priv, RGMII_IO_MACRO_BYPASS,
+				      BIT(0), BIT(0));
+	xgmac_amboseli_wrapper_update(priv, EMAC_WRAPPER_SGMII_PHY_CNTRL0,
+				      SGMII_PHY_CNTRL0_2P5G_1G_CLK_SEL,
+				      BIT(5));
+	xgmac_amboseli_wrapper_update(priv, EMAC_WRAPPER_SGMII_PHY_CNTRL1_V4,
+				      SGMII_PHY_CNTRL1_RGMII_SGMII_CLK_MUX_SEL |
+				      SGMII_PHY_CNTRL1_USXGMII_GMII_MASTER_CLK_MUX_SEL |
+				      SGMII_PHY_CNTRL1_SGMII_TX_TO_RX_LOOPBACK_EN,
+				      SGMII_PHY_CNTRL1_USXGMII_GMII_MASTER_CLK_MUX_SEL);
+	xgmac_amboseli_wrapper_update(priv, RGMII_IO_MACRO_CONFIG2,
+				      RGMII_CONFIG2_MODE_EN_VIA_GMII, 0);
+	xgmac_amboseli_wrapper_update(priv, EMAC_WRAPPER_USXGMII_MUX_SEL,
+				      BIT(1) | BIT(0), BIT(1));
+	xgmac_amboseli_wrapper_update(priv, RGMII_IO_MACRO_CONFIG,
+				      RGMII_CONFIG_MAX_SPD_PRG_2_V4,
+				      BIT(6) | BIT(9));
+	xgmac_amboseli_wrapper_update(priv, RGMII_IO_MACRO_CONFIG,
+				      RGMII_CONFIG_MAX_SPD_PRG_9_V4,
+				      BIT(10) | BIT(14) | BIT(15));
+	xgmac_amboseli_wrapper_update(priv, RGMII_IO_MACRO_CONFIG2,
+				      RGMII_CONFIG2_MAX_SPD_PRG_3,
+				      BIT(17) | BIT(20));
+	xgmac_amboseli_wrapper_update(priv, RGMII_IO_MACRO_SCRATCH_2,
+				      RGMII_SCRATCH2_MAX_SPD_PRG_4, BIT(2));
+	xgmac_amboseli_wrapper_update(priv, RGMII_IO_MACRO_SCRATCH_2,
+				      RGMII_SCRATCH2_MAX_SPD_PRG_5,
+				      BIT(6) | BIT(7));
+	xgmac_amboseli_wrapper_update(priv, RGMII_IO_MACRO_SCRATCH_2,
+				      RGMII_SCRATCH2_MAX_SPD_PRG_6, 0);
+	xgmac_amboseli_wrapper_update(priv, RGMII_IO_MACRO_CONFIG2,
+				      RGMII_CONFIG2_RGMII_CLK_SEL_CFG,
+				      RGMII_CONFIG2_RGMII_CLK_SEL_CFG);
+}
+
 /* dwc_eth_xgmac.c calls this at :559, immediately before the DMA_MODE.SWR wait at :567. */
 /* Pass 17 settled that the IO macro is programmable from U-Boot and that FUNC_CLK_EN plus the SGMII tx->rx loopback is not enough on its own: XGMAC_DMA_MODE_SWR s. */
 static int xgmac_amboseli_serdes_powerup(struct udevice *dev,
@@ -551,11 +655,25 @@ static int xgmac_amboseli_serdes_powerup(struct udevice *dev,
 {
 #if AMBOSELI_SERDES_SEQ_AVAILABLE
 	int i, written = 0;
+	int mode = SERDES_MODE_USX10G;
+	phy_interface_t interface = dev_read_phy_mode(dev);
+	const char *mode_name = "USX10G";
 
-	/* USXGMII maps to USX10G at every speed. */
+	if (interface == PHY_INTERFACE_MODE_SGMII) {
+		mode = SERDES_MODE_SGMII1P25;
+		mode_name = "SGMII1P25";
+	} else if (interface == PHY_INTERFACE_MODE_2500BASEX) {
+		mode = SERDES_MODE_SGMII2P5;
+		mode_name = "SGMII2P5";
+	} else if (interface == PHY_INTERFACE_MODE_5GBASER) {
+		mode = SERDES_MODE_USX5G;
+		mode_name = "USX5G";
+	}
+
+	/* USXGMII uses the USX10G sequence at every line rate. */
 	for (i = 0; i < ARRAY_SIZE(serdes_fe11lm_v1_3_seq); i++) {
 		const struct serdes_reg_per_mode *r = &serdes_fe11lm_v1_3_seq[i];
-		u32 val = r->value[SERDES_MODE_USX10G];
+		u32 val = r->value[mode];
 
 		if (val == SERDES_SKIP)
 			continue;
@@ -567,13 +685,13 @@ static int xgmac_amboseli_serdes_powerup(struct udevice *dev,
 	/* Linux polls four ready bits at this point. */
 	mdelay(10);
 
-	eth_trace("serdes: USX10G sequence applied, %d of %d entries written\n",
-		  written, (int)ARRAY_SIZE(serdes_fe11lm_v1_3_seq));
+	eth_trace("serdes: %s sequence applied, %d of %d entries written\n",
+		  mode_name, written, (int)ARRAY_SIZE(serdes_fe11lm_v1_3_seq));
 	if (eth_regdump_on()) {
-		printf("emac0: SerDes programmed USX10G entries=%d/%d "
+		printf("emac0: SerDes programmed %s entries=%d/%d "
 		       "[0110]=0x%02x [0174]=0x%02x [019c]=0x%02x "
 		       "[0e00]=0x%02x [0e04]=0x%02x [0e08]=0x%02x\n",
-		       written, (int)ARRAY_SIZE(serdes_fe11lm_v1_3_seq),
+		       mode_name, written, (int)ARRAY_SIZE(serdes_fe11lm_v1_3_seq),
 		       readl(priv->serdes + 0x0110) & 0xff,
 		       readl(priv->serdes + 0x0174) & 0xff,
 		       readl(priv->serdes + 0x019c) & 0xff,
@@ -614,6 +732,43 @@ static int amboseli_wrapper_col(int speed)
 		eth_trace("wrapper: no column for %d Mbps, using 1G\n", speed);
 		return AMBOSELI_WSPD_1000;
 	}
+}
+
+static bool xgmac_amboseli_usx5g_speed_valid(int speed)
+{
+	switch (speed) {
+	case SPEED_10:
+	case SPEED_100:
+	case SPEED_1000:
+	case SPEED_2500:
+	case SPEED_5000:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static int amboseli_wrapper_col_for_interface(phy_interface_t interface,
+						      int speed)
+{
+	int col;
+
+	if (interface == PHY_INTERFACE_MODE_2500BASEX)
+		return AMBOSELI_WSPD_2500;
+
+	col = amboseli_wrapper_col(speed);
+	if (interface == PHY_INTERFACE_MODE_SGMII && col < AMBOSELI_WSPD_1000) {
+		eth_trace("wrapper: %s has no %d Mbps column, using 1G\n",
+			  xgmac_amboseli_mode_name(interface), speed);
+		return AMBOSELI_WSPD_1000;
+	}
+	if (interface == PHY_INTERFACE_MODE_5GBASER &&
+	    col == AMBOSELI_WSPD_10000) {
+		eth_trace("wrapper: 5GBASE-R does not support 10G; using 5G column\n");
+		return AMBOSELI_WSPD_5000;
+	}
+
+	return col;
 }
 
 /* --------------------------------------------------------------------------- Pass 23 read the external PHY's MMDs directly and got: MMD 1 PMA/PMD LINK UP the med. */
@@ -689,12 +844,67 @@ static int xgmac_amboseli_xpcs_soft_reset(struct xgmac_amboseli_priv *priv)
 }
 
 /* qcom_xpcs_select_mode() (:950). */
-static void xgmac_amboseli_xpcs_select_mode(struct xgmac_amboseli_priv *priv)
+static void xgmac_amboseli_xpcs_select_mode(struct xgmac_amboseli_priv *priv,
+						    phy_interface_t interface)
 {
 	u32 val;
 
 	val = xpcs_rd(priv, DW_SR_MII_PCS_CTRL2);
-	xpcs_wr(priv, DW_SR_MII_PCS_CTRL2, val & ~PCS_TYPE_SEL_10GBR);
+	val &= ~PCS_TYPE_SEL_10GBR;
+
+	if (interface == PHY_INTERFACE_MODE_USXGMII ||
+	    interface == PHY_INTERFACE_MODE_5GBASER) {
+		xpcs_wr(priv, DW_SR_MII_PCS_CTRL2, val);
+		val = xpcs_rd(priv, DW_VR_MII_PCS_DIG_CTRL1);
+		xpcs_wr(priv, DW_VR_MII_PCS_DIG_CTRL1,
+			val | DW_USXGMII_EN);
+		val = xpcs_rd(priv, DW_VR_MII_PCS_KR_CTRL);
+		val &= ~USXG_MODE_SEL;
+		if (interface == PHY_INTERFACE_MODE_5GBASER)
+			val |= DW_USXGMII_MODE_5G;
+		xpcs_wr(priv, DW_VR_MII_PCS_KR_CTRL, val);
+		eth_trace("xpcs: %s mode selected (CTRL2 0x%08x, DIG_CTRL1 0x%08x, KR_CTRL 0x%08x)\n",
+			  xgmac_amboseli_mode_name(interface),
+			  xpcs_rd(priv, DW_SR_MII_PCS_CTRL2),
+			  xpcs_rd(priv, DW_VR_MII_PCS_DIG_CTRL1),
+			  xpcs_rd(priv, DW_VR_MII_PCS_KR_CTRL));
+		return;
+	}
+
+	if (interface == PHY_INTERFACE_MODE_SGMII) {
+		xpcs_wr(priv, DW_SR_MII_PCS_CTRL2, val | PCS_TYPE_SEL_10GBX);
+		val = xpcs_rd(priv, DW_VR_MII_PCS_DIG_CTRL1);
+		xpcs_wr(priv, DW_VR_MII_PCS_DIG_CTRL1, val & ~DW_USXGMII_EN);
+		val = xpcs_rd(priv, DW_VR_MII_AN_CTRL);
+		val &= ~DW_VR_MII_PCS_MODE_MASK;
+		val |= DW_VR_MII_PCS_MODE_C37_SGMII;
+		xpcs_wr(priv, DW_VR_MII_AN_CTRL, val);
+		eth_trace("xpcs: SGMII mode selected (CTRL2 0x%08x, DIG_CTRL1 0x%08x, AN_CTRL 0x%08x)\n",
+			  xpcs_rd(priv, DW_SR_MII_PCS_CTRL2),
+			  xpcs_rd(priv, DW_VR_MII_PCS_DIG_CTRL1),
+			  xpcs_rd(priv, DW_VR_MII_AN_CTRL));
+		return;
+	}
+
+	if (interface == PHY_INTERFACE_MODE_2500BASEX) {
+		xpcs_wr(priv, DW_SR_MII_PCS_CTRL2,
+			val | PCS_TYPE_SEL_2500BASEX);
+		val = xpcs_rd(priv, DW_VR_MII_PCS_DIG_CTRL1);
+		xpcs_wr(priv, DW_VR_MII_PCS_DIG_CTRL1, val & ~DW_USXGMII_EN);
+		val = xpcs_rd(priv, DW_VR_MII_PCS_KR_CTRL);
+		xpcs_wr(priv, DW_VR_MII_PCS_KR_CTRL, val | BIT(11));
+		val = xpcs_rd(priv, DW_VR_MII_PCS_DEBUG_CTRL);
+		xpcs_wr(priv, DW_VR_MII_PCS_DEBUG_CTRL,
+			val | BIT(8) | BIT(9));
+		eth_trace("xpcs: 2500BASE-X mode selected (CTRL2 0x%08x, DIG_CTRL1 0x%08x, KR_CTRL 0x%08x, DEBUG_CTRL 0x%08x)\n",
+			  xpcs_rd(priv, DW_SR_MII_PCS_CTRL2),
+			  xpcs_rd(priv, DW_VR_MII_PCS_DIG_CTRL1),
+			  xpcs_rd(priv, DW_VR_MII_PCS_KR_CTRL),
+			  xpcs_rd(priv, DW_VR_MII_PCS_DEBUG_CTRL));
+		return;
+	}
+
+	xpcs_wr(priv, DW_SR_MII_PCS_CTRL2, val);
 
 	val = xpcs_rd(priv, DW_VR_MII_PCS_DIG_CTRL1);
 	xpcs_wr(priv, DW_VR_MII_PCS_DIG_CTRL1, val | DW_USXGMII_EN);
@@ -751,7 +961,7 @@ static int xgmac_amboseli_xpcs_init(struct udevice *dev,
 	if (ret)
 		return ret;
 
-	xgmac_amboseli_xpcs_select_mode(priv);
+	xgmac_amboseli_xpcs_select_mode(priv, dev_read_phy_mode(dev));
 
 	/* The MAC needs an RX clock before the PHY can supply one, and the DMA soft reset that follows will not self-clear without it. */
 	xgmac_amboseli_xpcs_loopback(priv, true);
@@ -892,7 +1102,8 @@ static int xgmac_amboseli_xpcs_negotiated_speed(struct xgmac_amboseli_priv *priv
 }
 
 /* Pass 25's run 1 enabled USXGMII Clause-37 AN and it never completed. */
-static int xgmac_amboseli_xpcs_c37_hint(struct xgmac_amboseli_priv *priv)
+static int xgmac_amboseli_xpcs_c37_hint(struct xgmac_amboseli_priv *priv,
+						int *duplex)
 {
 	u32 sts = xpcs_rd(priv, DW_VR_MII_AN_INTR_STS);
 	int speed;
@@ -915,6 +1126,52 @@ static int xgmac_amboseli_xpcs_c37_hint(struct xgmac_amboseli_priv *priv)
 	eth_trace("xpcs: in-band hint %d Mbps %s duplex (AN_INTR_STS 0x%08x)\n",
 		  speed,
 		  sts & DW_VR_MII_AN_STS_C37_ANSGM_FD ? "full" : "half", sts);
+	if (duplex)
+		*duplex = sts & DW_VR_MII_AN_STS_C37_ANSGM_FD ?
+			DUPLEX_FULL : DUPLEX_HALF;
+
+	return speed;
+}
+
+static int xgmac_amboseli_xpcs_sgmii_negotiated_speed(
+						struct xgmac_amboseli_priv *priv,
+						int *duplex)
+{
+	u32 sts = xpcs_rd(priv, DW_VR_MII_AN_INTR_STS);
+	u32 ctrl;
+	int speed;
+
+	if (!(sts & DW_VR_MII_AN_STS_C37_ANSGM_LNKSTS)) {
+		eth_trace("xpcs: SGMII AN word says link down (AN_INTR_STS 0x%08x)\n",
+			  sts);
+		return -ENETDOWN;
+	}
+
+	switch ((sts & DW_VR_MII_AN_STS_C37_ANSGM_SP) >>
+		DW_VR_MII_AN_STS_C37_ANSGM_SP_SHIFT) {
+	case DW_VR_MII_C37_ANSGM_SP_1000:
+		speed = SPEED_1000;
+		break;
+	case DW_VR_MII_C37_ANSGM_SP_100:
+		speed = SPEED_100;
+		break;
+	case DW_VR_MII_C37_ANSGM_SP_10:
+	default:
+		speed = SPEED_10;
+		break;
+	}
+
+	*duplex = sts & DW_VR_MII_AN_STS_C37_ANSGM_FD ?
+		DUPLEX_FULL : DUPLEX_HALF;
+	ctrl = xpcs_rd(priv, DW_SR_MII_MMD_CTRL);
+	ctrl &= ~(DW_SGMII_SS_MASK | DW_FULL_DUPLEX);
+	ctrl |= xgmac_amboseli_xpcs_ss(speed);
+	if (*duplex == DUPLEX_FULL)
+		ctrl |= DW_FULL_DUPLEX;
+	xpcs_wr(priv, DW_SR_MII_MMD_CTRL, ctrl);
+
+	eth_trace("xpcs: SGMII negotiated %d Mbps %s duplex (AN_INTR_STS 0x%08x)\n",
+		  speed, *duplex == DUPLEX_FULL ? "full" : "half", sts);
 
 	return speed;
 }
@@ -959,27 +1216,74 @@ static int xgmac_amboseli_an_retries(void)
 	return simple_strtoul(s, NULL, 10);
 }
 
-/* qcom_xpcs_link_up() (:1061) + qcom_xpcs_link_up_usxgmii() (:859), USXGMII only. */
+/* qcom_xpcs_link_up() (:1061), including its USXGMII and SGMII/2500BASE-X paths. */
 static int xgmac_amboseli_xpcs_link_up(struct udevice *dev,
 				       struct xgmac_amboseli_priv *priv,
-				       int speed, bool an)
+				       int speed, int duplex, bool an)
 {
+	phy_interface_t interface = dev_read_phy_mode(dev);
 	int negotiated = speed;
+	int negotiated_duplex = duplex;
 	int ret;
 	u32 val;
+	bool sgmii = interface == PHY_INTERFACE_MODE_SGMII;
+	bool basex = interface == PHY_INTERFACE_MODE_2500BASEX;
+	bool usx5g = interface == PHY_INTERFACE_MODE_5GBASER;
+	bool do_an = an && !basex;
+
+	if (basex) {
+		speed = SPEED_2500;
+		negotiated = SPEED_2500;
+		duplex = DUPLEX_FULL;
+		negotiated_duplex = DUPLEX_FULL;
+	} else if (usx5g) {
+		if (!xgmac_amboseli_usx5g_speed_valid(speed))
+			speed = SPEED_5000;
+		negotiated = speed;
+		duplex = DUPLEX_FULL;
+		negotiated_duplex = DUPLEX_FULL;
+	}
 
 	/* Drop the RX-clock loopback: by now the external PHY has a media link (pass 23 confirmed MMD 1 up) and supplies the clock itself. */
 	xgmac_amboseli_xpcs_loopback(priv, false);
 
-	xgmac_amboseli_xpcs_select_mode(priv);
+	xgmac_amboseli_xpcs_select_mode(priv, interface);
 
-	xgmac_amboseli_xpcs_an_params(priv, an);
+	xgmac_amboseli_xpcs_an_params(priv, do_an);
 
 	/* Program the requested speed before AN, as the kernel does. */
-	val = xpcs_rd(priv, DW_SR_MII_MMD_CTRL) & ~DW_USXGMII_SS_MASK;
-	xpcs_wr(priv, DW_SR_MII_MMD_CTRL, val | xgmac_amboseli_xpcs_ss(speed));
+	val = xpcs_rd(priv, DW_SR_MII_MMD_CTRL);
+	if (sgmii || basex) {
+		val &= ~DW_SGMII_SS_MASK;
+		if (sgmii) {
+			switch (speed) {
+			case SPEED_1000:
+				val |= DW_GMII_1000;
+				break;
+			case SPEED_100:
+				val |= DW_GMII_100;
+				break;
+			case SPEED_10:
+				break;
+			default:
+				dev_err(dev, "unsupported SGMII speed %d, using 1G\n",
+					speed);
+				speed = SPEED_1000;
+				negotiated = speed;
+				val |= DW_GMII_1000;
+				break;
+			}
+		}
+		val &= ~DW_FULL_DUPLEX;
+		if (duplex == DUPLEX_FULL || basex)
+			val |= DW_FULL_DUPLEX;
+	} else {
+		val &= ~DW_USXGMII_SS_MASK;
+		val |= xgmac_amboseli_xpcs_ss(speed);
+	}
+	xpcs_wr(priv, DW_SR_MII_MMD_CTRL, val);
 
-	if (an) {
+	if (do_an) {
 		int tries = xgmac_amboseli_an_retries() + 1;
 		bool deep = !xgmac_env_off_local("eth_reinit");
 		int try;
@@ -997,19 +1301,43 @@ static int xgmac_amboseli_xpcs_link_up(struct udevice *dev,
 					xgmac_amboseli_xpcs_init(dev, priv);
 					xgmac_amboseli_serdes_powerup(dev, priv);
 					xgmac_amboseli_xpcs_loopback(priv, false);
-					xgmac_amboseli_xpcs_select_mode(priv);
+					xgmac_amboseli_xpcs_select_mode(priv, interface);
 				}
 
-				xgmac_amboseli_xpcs_an_params(priv, an);
-				val = xpcs_rd(priv, DW_SR_MII_MMD_CTRL) &
-				      ~DW_USXGMII_SS_MASK;
-				xpcs_wr(priv, DW_SR_MII_MMD_CTRL,
-					val | xgmac_amboseli_xpcs_ss(speed));
+				xgmac_amboseli_xpcs_an_params(priv, do_an);
+				val = xpcs_rd(priv, DW_SR_MII_MMD_CTRL);
+				if (sgmii) {
+					val &= ~DW_SGMII_SS_MASK;
+					if (speed == SPEED_1000)
+						val |= DW_GMII_1000;
+					else if (speed == SPEED_100)
+						val |= DW_GMII_100;
+					val &= ~DW_FULL_DUPLEX;
+					if (duplex == DUPLEX_FULL)
+						val |= DW_FULL_DUPLEX;
+				} else {
+					val &= ~DW_USXGMII_SS_MASK;
+					val |= xgmac_amboseli_xpcs_ss(speed);
+				}
+				xpcs_wr(priv, DW_SR_MII_MMD_CTRL, val);
 			}
 
 			ret = xgmac_amboseli_xpcs_wait_an(priv);
 			if (!ret) {
-				ret = xgmac_amboseli_xpcs_negotiated_speed(priv);
+				if (sgmii)
+					ret = xgmac_amboseli_xpcs_sgmii_negotiated_speed(
+						priv, &negotiated_duplex);
+				else
+					ret = xgmac_amboseli_xpcs_negotiated_speed(priv);
+				if (usx5g && ret > SPEED_5000) {
+					val = xpcs_rd(priv, DW_SR_MII_MMD_CTRL);
+					val &= ~DW_USXGMII_SS_MASK;
+					val |= xgmac_amboseli_xpcs_ss(speed);
+					xpcs_wr(priv, DW_SR_MII_MMD_CTRL, val);
+					eth_trace("xpcs: ignoring unsupported %d Mbps result in 5GBASE-R mode\n",
+						  ret);
+					ret = -ERANGE;
+				}
 				break;
 			}
 		}
@@ -1021,22 +1349,37 @@ static int xgmac_amboseli_xpcs_link_up(struct udevice *dev,
 				  tries, speed);
 	}
 
-	/* Post-AN reset sequence. */
-	udelay(1);
+	if (sgmii && do_an)
+		priv->xpcs_duplex = negotiated_duplex;
+	else if (basex)
+		priv->xpcs_duplex = DUPLEX_FULL;
+	else if (usx5g)
+		priv->xpcs_duplex = DUPLEX_FULL;
+	else
+		priv->xpcs_duplex = duplex;
 
-	xgmac_amboseli_xpcs_wait_rlu(priv);
+	if (!sgmii && !basex) {
+		/* Post-AN reset sequence. */
+		udelay(1);
 
-	xpcs_wr(priv, DW_VR_MII_PCS_DIG_CTRL1,
-		xpcs_rd(priv, DW_VR_MII_PCS_DIG_CTRL1) | DW_USXGMII_RST);
+		xgmac_amboseli_xpcs_wait_rlu(priv);
 
-	ret = xpcs_poll_reset(priv, DW_VR_MII_PCS_DIG_CTRL1, DW_USXGMII_RST);
-	if (ret) {
-		dev_err(dev, "XPCS USXGMII reset stuck (DIG_CTRL1 0x%08x)\n",
-			xpcs_rd(priv, DW_VR_MII_PCS_DIG_CTRL1));
-		return ret;
+		xpcs_wr(priv, DW_VR_MII_PCS_DIG_CTRL1,
+			xpcs_rd(priv, DW_VR_MII_PCS_DIG_CTRL1) | DW_USXGMII_RST);
+
+		ret = xpcs_poll_reset(priv, DW_VR_MII_PCS_DIG_CTRL1,
+				      DW_USXGMII_RST);
+		if (ret) {
+			dev_err(dev, "XPCS USXGMII reset stuck (DIG_CTRL1 0x%08x)\n",
+				xpcs_rd(priv, DW_VR_MII_PCS_DIG_CTRL1));
+			return ret;
+		}
 	}
 
-	eth_trace("xpcs: link up sequence complete at %d Mbps\n", negotiated);
+	eth_trace("xpcs: %s link up sequence complete at %d Mbps%s\n",
+		  xgmac_amboseli_mode_name(interface), negotiated,
+		  sgmii ? (priv->xpcs_duplex == DUPLEX_FULL ? " full duplex" :
+			  " half duplex") : "");
 	xgmac_amboseli_xpcs_program_dump(priv, "after-link-up");
 
 	return negotiated;
@@ -1060,6 +1403,8 @@ static int xgmac_amboseli_adjust_phy_speed(struct udevice *dev,
 					   struct xgmac_amboseli_priv *priv,
 					   struct phy_device *phydev)
 {
+	phy_interface_t interface = dev_read_phy_mode(dev);
+
 	if (!priv->xpcs_speed)
 		return 0;
 
@@ -1069,8 +1414,10 @@ static int xgmac_amboseli_adjust_phy_speed(struct udevice *dev,
 		phydev->speed = priv->xpcs_speed;
 	}
 
-	/* USXGMII carries full duplex only. */
-	phydev->duplex = DUPLEX_FULL;
+	if (interface == PHY_INTERFACE_MODE_SGMII)
+		phydev->duplex = priv->xpcs_duplex;
+	else
+		phydev->duplex = DUPLEX_FULL;
 
 	return 0;
 }
@@ -1082,22 +1429,94 @@ static int xgmac_amboseli_pcs_adjust_phy(struct udevice *dev,
 	struct xgmac_priv *xgmac = dev_get_priv(dev);
 	struct xgmac_amboseli_priv *priv = xgmac->syscon_phy;
 	const char *s;
-	int speed;
+	int speed = 0;
+	int duplex = phydev->duplex;
+	phy_interface_t interface = dev_read_phy_mode(dev);
 
 	if (!priv)
 		return 0;
 
-	if (!xgmac_amboseli_xpcs_mode() || !priv->pcs)
+	if (interface == PHY_INTERFACE_MODE_2500BASEX) {
+		priv->xpcs_speed = SPEED_2500;
+		priv->xpcs_duplex = DUPLEX_FULL;
+		phydev->speed = SPEED_2500;
+		phydev->duplex = DUPLEX_FULL;
 		return 0;
+	}
+
+	if (interface == PHY_INTERFACE_MODE_5GBASER) {
+		if (xgmac_amboseli_xpcs_mode() && priv->pcs) {
+			speed = xgmac_amboseli_xpcs_negotiated_speed(priv);
+			if (!xgmac_amboseli_usx5g_speed_valid(speed)) {
+				u32 sts = xpcs_rd(priv, DW_VR_MII_AN_INTR_STS);
+
+				if (sts & DW_VR_MII_AN_STS_C37_ANSGM_LNKSTS)
+					speed = xgmac_amboseli_xpcs_c37_hint(priv, NULL);
+			}
+		}
+
+		if (!xgmac_amboseli_usx5g_speed_valid(speed))
+			speed = xgmac_amboseli_usx5g_speed_valid(phydev->speed) ?
+				phydev->speed : SPEED_5000;
+
+		s = env_get("eth_speed");
+		if (s) {
+			int forced_speed = simple_strtol(s, NULL, 10);
+
+			if (xgmac_amboseli_usx5g_speed_valid(forced_speed))
+				speed = forced_speed;
+			else
+				eth_trace("phy: ignoring eth_speed=%s for 5GBASE-R\n", s);
+		}
+
+		priv->xpcs_speed = speed;
+		priv->xpcs_duplex = DUPLEX_FULL;
+		phydev->speed = speed;
+		phydev->duplex = DUPLEX_FULL;
+		return 0;
+	}
+
+	if (!xgmac_amboseli_xpcs_mode() || !priv->pcs) {
+		if (interface == PHY_INTERFACE_MODE_SGMII &&
+		    phydev->speed != SPEED_10 && phydev->speed != SPEED_100 &&
+		    phydev->speed != SPEED_1000)
+			phydev->speed = SPEED_1000;
+		return 0;
+	}
 
 	/* Deciding it here rather than in the link-up sequence is what lets the wrapper be reprogrammed before the XPCS comes up. */
-	speed = xgmac_amboseli_xpcs_c37_hint(priv);
-	if (!speed)
-		speed = SPEED_1000;
+	if (interface == PHY_INTERFACE_MODE_SGMII) {
+		u32 sts = xpcs_rd(priv, DW_VR_MII_AN_INTR_STS);
+
+		if (sts & DW_VR_MII_AN_STS_C37_ANSGM_LNKSTS)
+			speed = xgmac_amboseli_xpcs_c37_hint(priv, &duplex);
+		else
+			speed = 0;
+		if (!speed && phydev->speed != SPEED_10 &&
+		    phydev->speed != SPEED_100 && phydev->speed != SPEED_1000)
+			speed = SPEED_1000;
+		else if (!speed)
+			speed = phydev->speed;
+		priv->xpcs_duplex = duplex;
+	} else {
+		speed = xgmac_amboseli_xpcs_c37_hint(priv, NULL);
+		if (!speed)
+			speed = (phydev->speed > SPEED_1000) ?
+				phydev->speed : SPEED_1000;
+		priv->xpcs_duplex = DUPLEX_FULL;
+	}
 
 	s = env_get("eth_speed");
-	if (s)
-		speed = simple_strtol(s, NULL, 10);
+	if (s && interface != PHY_INTERFACE_MODE_2500BASEX) {
+		int forced_speed = simple_strtol(s, NULL, 10);
+
+		if (interface != PHY_INTERFACE_MODE_SGMII ||
+		    forced_speed == SPEED_10 || forced_speed == SPEED_100 ||
+		    forced_speed == SPEED_1000)
+			speed = forced_speed;
+		else
+			eth_trace("phy: ignoring eth_speed=%s for SGMII\n", s);
+	}
 
 	priv->xpcs_speed = speed;
 
@@ -1106,13 +1525,16 @@ static int xgmac_amboseli_pcs_adjust_phy(struct udevice *dev,
 
 /* Write one speed column of the wrapper table. */
 static void xgmac_amboseli_wrapper_write(struct xgmac_amboseli_priv *priv,
-					 int col)
+						 phy_interface_t interface,
+						 int col)
 {
+	const struct amboseli_wrapper_reg *table;
+	size_t count;
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(amboseli_wrapper_usxgmii); i++) {
-		const struct amboseli_wrapper_reg *r =
-			&amboseli_wrapper_usxgmii[i];
+	table = xgmac_amboseli_wrapper_table(interface, &count);
+	for (i = 0; i < count; i++) {
+		const struct amboseli_wrapper_reg *r = &table[i];
 		u32 want = r->value[col];
 		u32 val;
 
@@ -1178,7 +1600,19 @@ static int xgmac_start_resets_amboseli(struct udevice *dev)
 		return 0;
 	}
 
-	xgmac_amboseli_wrapper_write(priv, AMBOSELI_WSPD_1000);
+	{
+		phy_interface_t interface = dev_read_phy_mode(dev);
+		int initial_speed = SPEED_1000;
+
+		if (interface == PHY_INTERFACE_MODE_2500BASEX)
+			initial_speed = SPEED_2500;
+		else if (interface == PHY_INTERFACE_MODE_5GBASER)
+			initial_speed = SPEED_5000;
+
+		xgmac_amboseli_wrapper_write(priv, interface,
+					     amboseli_wrapper_col_for_interface(
+						     interface, initial_speed));
+	}
 
 	wrapper_mark("set_func_clk_en", EMAC_WRAPPER_SGMII_PHY_CNTRL1_V4);
 	xgmac_amboseli_set_func_clk_en(priv->rgmii);
@@ -1188,7 +1622,8 @@ static int xgmac_start_resets_amboseli(struct udevice *dev)
 		       readl(priv->rgmii + RGMII_IO_MACRO_CONFIG),
 		       readl(priv->rgmii + EMAC_WRAPPER_SGMII_PHY_CNTRL1_V4));
 
-	eth_trace("wrapper: 1G config + func_clk_en/loopback applied (0x174 = 0x%08x, expect 0x0000000e)\n",
+	eth_trace("wrapper: %s initial config + func_clk_en/loopback applied (0x174 = 0x%08x)\n",
+		  xgmac_amboseli_mode_name(dev_read_phy_mode(dev)),
 		  readl(priv->rgmii + EMAC_WRAPPER_SGMII_PHY_CNTRL1_V4));
 
 	/* Linux reaches the equivalent point from stmmac's hw_setup, which is also after the wrapper's probe-time ethqos_configure() and before init_dma_engine. */
@@ -1242,7 +1677,7 @@ static int xgmac_amboseli_fix_mac_speed(struct udevice *dev, int speed)
 		speed = priv->xpcs_speed;
 	}
 
-	col = amboseli_wrapper_col(speed);
+	col = amboseli_wrapper_col_for_interface(dev_read_phy_mode(dev), speed);
 
 	eth_trace("wrapper: link up at %d Mbps, reprogramming for %s\n",
 		  speed, amboseli_wspd_name[col]);
@@ -1251,7 +1686,9 @@ static int xgmac_amboseli_fix_mac_speed(struct udevice *dev, int speed)
 	clrbits_le32(priv->rgmii + EMAC_WRAPPER_SGMII_PHY_CNTRL1_V4,
 		     SGMII_PHY_CNTRL1_SGMII_TX_TO_RX_LOOPBACK_EN);
 
-	xgmac_amboseli_wrapper_write(priv, col);
+	xgmac_amboseli_wrapper_write(priv, dev_read_phy_mode(dev), col);
+	if (dev_read_phy_mode(dev) == PHY_INTERFACE_MODE_5GBASER)
+		xgmac_amboseli_configure_usx5g_wrapper(priv);
 
 	/* "setenv eth_loopback 1" keeps the wrapper's tx-to-rx loopback on through the data phase. */
 	if (env_get("eth_loopback")) {
@@ -1268,13 +1705,31 @@ static int xgmac_amboseli_fix_mac_speed(struct udevice *dev, int speed)
 	/* The wrapper table drives the EMAC's clock mux and dividers for the negotiated rate. */
 	if (xgmac_amboseli_xpcs_mode() && priv->pcs) {
 		int negotiated = xgmac_amboseli_xpcs_link_up(dev, priv, speed,
-					xgmac_amboseli_xpcs_mode() == 1);
+							     xgmac->phy->duplex,
+							     xgmac_amboseli_xpcs_mode() == 1);
 
 		if (negotiated < 0)
 			dev_err(dev, "XPCS link up failed: %d\n", negotiated);
-		else if (negotiated != speed)
-			eth_trace("wrapper: NB: XPCS came up at %d Mbps but the wrapper is programmed for %d - setenv eth_speed %d and retry\n",
-				  negotiated, speed, negotiated);
+		else if (negotiated > 0) {
+			priv->xpcs_speed = negotiated;
+			xgmac->phy->speed = negotiated;
+			if (dev_read_phy_mode(dev) == PHY_INTERFACE_MODE_SGMII)
+				xgmac->phy->duplex = priv->xpcs_duplex;
+			else
+				xgmac->phy->duplex = DUPLEX_FULL;
+			if (negotiated != speed) {
+				xgmac_amboseli_wrapper_write(priv,
+							     dev_read_phy_mode(dev),
+							     amboseli_wrapper_col_for_interface(
+								     dev_read_phy_mode(dev),
+								     negotiated));
+				if (dev_read_phy_mode(dev) ==
+				    PHY_INTERFACE_MODE_5GBASER)
+					xgmac_amboseli_configure_usx5g_wrapper(priv);
+				eth_trace("wrapper: XPCS came up at %d Mbps; updated wrapper and MAC speed\n",
+					  negotiated);
+			}
+		}
 	}
 
 	return 0;
@@ -1351,8 +1806,6 @@ static struct xgmac_ops xgmac_amboseli_ops = {
 /* axi_bus_width: emac0 declares dma-coherent and a 64-bit AXI master in the kernel DT, so XGMAC_AXI_WIDTH_64 matches. */
 struct xgmac_config __maybe_unused xgmac_amboseli_config = {
 	.reg_access_always_ok = false,
-	/* emac0_phy declares compatible = "ethernet-phy-ieee802.3-c45". */
-	.phy_force_c45 = true,
 	/* The global MTL/DMA registers stay at 0x1000/0x3000 - the 0x3000 DMA_MODE/SWR path is hardware-proven. */
 	.mtl_chan_base = 0x8000,
 	.dma_chan_base = 0x8500,

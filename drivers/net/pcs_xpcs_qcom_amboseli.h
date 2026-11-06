@@ -6,10 +6,8 @@
  *
  * Transcribed from the Linux driver's private header,
  *   ref/amboseli-eth/pcs-xpcs-qcom.h
- * keeping the kernel's names so the two can be diffed. Only the registers and
- * fields the USXGMII bring-up path touches are here; the SGMII, 2500BASEX, EEE,
- * FUSA/safety and time-sync groups are omitted deliberately - this port targets
- * emac0 in USXGMII mode and unused defines are just surface area to get wrong.
+ * keeping the kernel's names so the two can be diffed. This contains the
+ * USXGMII, SGMII and 2500BASE-X bring-up registers used by this port.
  *
  * The window is emac0's "qcom-xpcs-handle" phandle target, pcs@22314000, size
  * 0x5100. Offsets here are byte offsets into that window and every access is a
@@ -62,14 +60,20 @@
 
 /* VR_XS_PCS - vendor-specific PCS block. */
 #define DW_VR_MII_PCS_DIG_CTRL1			0x2000
+#define DW_VR_MII_PCS_DEBUG_CTRL		0x2014
 #define DW_VR_MII_PCS_KR_CTRL			0x201c
 
 /* VR_MII_PCS_DIG_CTRL1 */
 #define DW_USXGMII_RST				BIT(10)
 #define DW_USXGMII_EN				BIT(9)
 
+/* PCS type selection in SR_MII_PCS_CTRL2. */
+#define PCS_TYPE_SEL_10GBX			BIT(0)
+#define PCS_TYPE_SEL_2500BASEX			GENMASK(3, 1)
+
 /* VR_MII_PCS_KR_CTRL: USXGMII rate select. Zero selects the 10G rate. */
 #define USXG_MODE_SEL				GENMASK(12, 10)
+#define DW_USXGMII_MODE_5G			BIT(10)
 
 /* SR_MII - Clause 22 / Clause 37 MII MMD, flat-mapped at 0x4000. */
 #define DW_SR_MII_MMD_CTRL			0x4000
@@ -77,6 +81,8 @@
 /* SR_MII_MMD_CTRL */
 #define DW_LBE					BIT(14)	/* RX-clock loopback enable */
 #define AN_CL37_EN				BIT(12)	/* Clause 37 autoneg enable */
+#define DW_FULL_DUPLEX				BIT(8)
+#define DW_SGMII_SS_MASK			(BIT(13) | BIT(6))
 #define DW_USXGMII_SS_MASK			(BIT(13) | BIT(6) | BIT(5))
 #define DW_USXGMII_10000			(BIT(13) | BIT(6))
 #define DW_USXGMII_5000				(BIT(13) | BIT(5))
@@ -94,6 +100,8 @@
 #define DW_VR_MII_AN_CTRL_TX_CONFIG_SHIFT	3
 #define DW_VR_MII_TX_CONFIG_PHY_SIDE		0x1
 #define DW_VR_MII_SGMII_LINK_STS		BIT(4)
+#define DW_VR_MII_PCS_MODE_MASK			GENMASK(2, 1)
+#define DW_VR_MII_PCS_MODE_C37_SGMII		BIT(2)
 #define DW_VR_MII_AN_INTR_EN			BIT(0)
 #define DW_VR_MII_CTRL				BIT(8)
 
@@ -103,6 +111,7 @@
 #define DW_VR_MII_AN_STS_C37_ANSGM_FD		BIT(1)
 #define DW_VR_MII_AN_STS_C37_ANSGM_SP_SHIFT	2
 #define DW_VR_MII_AN_STS_C37_ANSGM_SP		GENMASK(3, 2)
+#define DW_VR_MII_AN_STS_C37_ANSGM_LNKSTS	BIT(4)
 #define DW_VR_MII_C37_ANSGM_SP_10		0x0
 #define DW_VR_MII_C37_ANSGM_SP_100		0x1
 #define DW_VR_MII_C37_ANSGM_SP_1000		0x2

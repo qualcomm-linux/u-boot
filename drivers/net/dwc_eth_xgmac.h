@@ -6,6 +6,10 @@
 #include <phy_interface.h>
 #include <linux/bitops.h>
 
+#ifndef SPEED_5000
+#define SPEED_5000			5000
+#endif
+
 /* Core registers */
 
 #define XGMAC_MAC_REGS_BASE 0x000
@@ -423,15 +427,6 @@ struct xgmac_desc {
 
 struct xgmac_config {
 	bool reg_access_always_ok;
-	/*
-	 * Bind the PHY through the clause-45 driver even when the clause-22
-	 * scan in get_phy_device_by_mask() claimed it first. Needed for PHYs
-	 * that answer on both clauses: U-Boot decides is_c45 purely from scan
-	 * order and never looks at the DT compatible string, so a C45 PHY with
-	 * a readable C22 space gets genphy, which then polls BMSR for an
-	 * autoneg-complete bit the PHY only maintains in MMD 7.
-	 */
-	bool phy_force_c45;
 	/* 0 = upstream defaults (XGMAC_{MTL,DMA}_CHAN_BASE_DEFAULT) */
 	u32 mtl_chan_base;
 	u32 dma_chan_base;
