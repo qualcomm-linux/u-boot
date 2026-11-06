@@ -39,6 +39,17 @@ config REBOOT_MODE_NVMEM
 	  Use any kind of non-volatile memory (EEPROM, RTC, etc) to control the
 	  reboot mode.
 
+config REBOOT_MODE_PSCI
+	bool "Use PSCI SYSTEM_RESET2 vendor resets as reboot modes"
+	depends on DM_REBOOT_MODE && ARM_SMCCC && ARM64
+	help
+	  Trigger PSCI SYSTEM_RESET2 vendor-specific resets (for example
+	  rebooting a Qualcomm SoC into EDL/download mode) via the reboot-mode
+	  framework. Each reset is described by a "mode-*" property under the
+	  "reboot-mode" subnode of the psci device tree node, so the magic
+	  values are not hard-coded in the driver. The modes can then be
+	  triggered from the "reset" command by name.
+
 config REBOOT_MODE_ENV_UPDATE
 	bool "Automatically update reboot-mode env variable on boot"
 	depends on DM_REBOOT_MODE
@@ -48,16 +59,5 @@ config REBOOT_MODE_ENV_UPDATE
 	  init. Trigger-only backends (e.g. PSCI) have no backing store to
 	  read and are skipped, so only devices with a get() op update the
 	  env variable.
-
-config REBOOT_MODE_PSCI
-	bool "Use PSCI SYSTEM_RESET2 vendor resets as reboot modes"
-	depends on DM_REBOOT_MODE && ARM_SMCCC
-	help
-	  Trigger PSCI SYSTEM_RESET2 vendor-specific resets (for example
-	  rebooting a Qualcomm SoC into EDL/download mode) via the reboot-mode
-	  framework. Each reset is described by a "mode-*" property under the
-	  "reboot-mode" subnode of the psci device tree node, so the magic
-	  values are not hard-coded in the driver. The modes can then be
-	  triggered from the "reset" command by name.
 
 endmenu
