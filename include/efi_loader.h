@@ -1182,15 +1182,11 @@ efi_status_t efi_capsule_authenticate(const void *capsule,
  * @fw_name:		Name of the firmware image
  * @image_index:	Image Index, same as value passed to SetImage FMP
  *                      function
- * @dfu_alt_num:	DFU alt setting number for this image. Only consulted
- *                      by a platform's efi_firmware_get_dfu_alt_num()
- *                      override
  */
 struct efi_fw_image {
 	efi_guid_t image_type_id;
 	u16 *fw_name;
 	u8 image_index;
-	u8 dfu_alt_num;
 };
 
 /**
@@ -1240,29 +1236,15 @@ efi_status_t efi_esrt_populate(void);
 efi_status_t efi_load_capsule_drivers(void);
 
 /**
- * efi_firmware_get_dfu_alt_num() - get the DFU alt setting number for an image
- * @image_index:	image index
+ * efi_capsule_resolve_image_index() - get the FMP image index for a capsule
+ * @image_type:		image type GUID from the capsule
+ * @capsule_index:	image index from the capsule
  *
- * Return the DFU alt setting number to use when writing the image
- * identified by @image_index. Weak default derives it positionally as
- * (image_index - 1); a platform whose fw_images[] is not laid out 1:1 with
- * DFU alt numbers should override this function.
+ * The default returns @capsule_index. A platform whose image indices are
+ * not fixed at build time can override this to look the image up by
+ * @image_type.
  *
- * Return:		DFU alt setting number
- */
-u8 efi_firmware_get_dfu_alt_num(u8 image_index);
-
-/**
- * efi_capsule_resolve_image_index() - map a capsule to its platform image index
- * @image_type:		image type GUID from the capsule (UpdateImageTypeId)
- * @capsule_index:	image index from the capsule (UpdateImageIndex)
- *
- * Return the image_index to use for efi_fmp_find() and set_image(). The weak
- * default returns @capsule_index unchanged; a platform whose fw_images[] is
- * built dynamically overrides this to resolve @image_type to its own
- * image_index.
- *
- * Return:		image_index to use for efi_fmp_find() and set_image()
+ * Return:		image index to pass to efi_fmp_find() and set_image()
  */
 u8 efi_capsule_resolve_image_index(const efi_guid_t *image_type,
 				   u8 capsule_index);
