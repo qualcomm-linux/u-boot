@@ -30,6 +30,9 @@
 #define APCS_GPLL9_STATUS			0x9000
 #define APCS_GPLLX_ENA_REG			0x4b028
 
+#define EMAC0_PHY_AUX_CLK_CMD_RCGR		0xb6028
+#define EMAC0_PTP_CLK_CMD_RCGR			0xb6060
+
 #define GCC_QUPV3_WRAP0_S0_CLK_ENA_BIT BIT(10)
 #define GCC_QUPV3_WRAP0_S1_CLK_ENA_BIT BIT(11)
 #define GCC_QUPV3_WRAP0_S2_CLK_ENA_BIT BIT(12)
@@ -122,6 +125,19 @@ static const struct pll_vote_clk gpll9_vote_clk = {
 	.vote_bit = BIT(9),
 };
 
+/* EMAC0 PHY AUX clock frequency table */
+static const struct freq_tbl ftbl_gcc_emac0_phy_aux_clk_src[] = {
+	F(19200000, CFG_CLK_SRC_CXO, 1, 0, 0),
+	{ }
+};
+
+/* EMAC0 PTP clock frequency table */
+static const struct freq_tbl ftbl_gcc_emac0_ptp_clk_src[] = {
+	F(125000000, CFG_CLK_SRC_GPLL7_EMAC0, 8, 0, 0),
+	F(230400000, CFG_CLK_SRC_GPLL4, 3.5, 0, 0),
+	{ }
+};
+
 static ulong sa8775p_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
@@ -160,6 +176,14 @@ static ulong sa8775p_set_rate(struct clk *clk, ulong rate)
 	case GCC_UFS_PHY_PHY_AUX_CLK:
 		clk_rcg_set_rate(priv->base, UFS_PHY_PHY_AUX_CLK_CMD_RCGR, 0, CFG_CLK_SRC_CXO);
 		return 19200000;
+	case GCC_EMAC0_PHY_AUX_CLK:
+		clk_rcg_set_rate(priv->base, EMAC0_PHY_AUX_CLK_CMD_RCGR, 0, CFG_CLK_SRC_CXO);
+		return 19200000;
+	case GCC_EMAC0_PTP_CLK:
+		freq = qcom_find_freq(ftbl_gcc_emac0_ptp_clk_src, rate);
+		clk_rcg_set_rate_mnd(priv->base, EMAC0_PTP_CLK_CMD_RCGR,
+				     freq->pre_div, freq->m, freq->n, freq->src, 16);
+		return freq->freq;
 	case GCC_SDCC1_APPS_CLK:
 		freq = qcom_find_freq(ftbl_gcc_sdcc1_apps_clk_src, rate);
 		/* SDCC1 high-speed rates source from GPLL9; vote it on first. */
@@ -239,6 +263,12 @@ static const struct gate_clk sa8775p_clks[] = {
 	/* SDCC1 clocks */
 	GATE_CLK_POLLED(GCC_SDCC1_AHB_CLK, 0x2000c, BIT(0), 0x2000c),
 	GATE_CLK_POLLED(GCC_SDCC1_APPS_CLK, 0x20004, BIT(0), 0x20004),
+
+	/* EMAC0 clocks */
+	GATE_CLK_POLLED(GCC_EMAC0_AXI_CLK, 0xb6018, BIT(0), 0xb6018),
+	GATE_CLK_POLLED(GCC_EMAC0_SLV_AHB_CLK, 0xb6020, BIT(0), 0xb6020),
+	GATE_CLK_POLLED(GCC_EMAC0_PHY_AUX_CLK, 0xb6024, BIT(0), 0xb6024),
+	GATE_CLK_POLLED(GCC_EMAC0_PTP_CLK, 0xb6040, BIT(0), 0xb6040),
 };
 
 static int sa8775p_enable(struct clk *clk)
@@ -319,6 +349,7 @@ static const struct qcom_reset_map sa8775p_gcc_resets[] = {
 static const struct qcom_power_map sa8775p_gdscs[] = {
 	[UFS_PHY_GDSC] = { 0x83004 },
 	[USB30_PRIM_GDSC] = { 0x1B004 },
+	[EMAC0_GDSC] = { 0xb6004 },
 };
 
 static struct msm_clk_data sa8775_gcc_data = {
