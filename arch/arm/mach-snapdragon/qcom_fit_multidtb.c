@@ -29,6 +29,11 @@
 #include "qcom_fit_multidtb.h"
 #include "qcom_hwdetect.h"
 
+#if CONFIG_IS_ENABLED(EFI_VARIABLE_FILE_STORE)
+#include <efi_loader.h>
+#include <efi_variable.h>
+#endif
+
 /* FIT image filename on FAT partition and raw partition name */
 #define QCOM_FIT_FILENAME	"qclinux_fit.img"
 #define QCOM_FIT_PARTNAME	"dtb_a"
@@ -63,6 +68,10 @@
 #define PROP_FDT               "fdt"
 #define PROP_DATA              "data"
 
+#if CONFIG_IS_ENABLED(EFI_VARIABLE_FILE_STORE)
+#define QCOM_VENDOR_DTBO_EFIVAR_MAX_LEN	256
+#endif
+
 /**
  * struct overlay_entry - Gathered overlay FDT image info
  * @name: Overlay image name in the FIT
@@ -74,6 +83,122 @@ struct overlay_entry {
 	const void *data;
 	size_t size;
 };
+
+#if CONFIG_IS_ENABLED(EFI_VARIABLE_FILE_STORE)
+
+/* Qualcomm VendorDtbOverlays UEFI variable. */
+static const u16 qcom_vendor_dtbo_efivar_name[] = u"VendorDtbOverlays";
+
+static const efi_guid_t qcom_vendor_dtbo_efivar_guid =
+	EFI_GUID(0x882f8c2b, 0x9646, 0x435f,
+		 0x8d, 0xe5, 0xf2, 0x08, 0xff, 0x80, 0xc1, 0xbd);
+
+/**
+ * qcom_efivar_payload_to_str() - Convert a efi variable payload to a C string
+ * @data: Payload bytes, ASCII or UTF-16LE restricted to ASCII characters
+ * @len: Payload length in bytes
+ * @out: Returns a malloc()'d NUL-terminated string
+ *
+ * The payload is detected as UTF-16LE when its length is even and every odd
+ * byte is zero. A single trailing NUL (character) is tolerated in both forms.
+ *
+ * Return: 0 on success, -ENOENT if empty, -EINVAL if it contains an
+ *	   embedded NUL, -ENOMEM on allocation failure
+ */
+static int qcom_efivar_payload_to_str(const u8 *data, size_t len, char **out)
+{
+	bool utf16 = false;
+	size_t i, n;
+	char *str;
+
+	if (len >= 2 && !(len & 1)) {
+		utf16 = true;
+		for (i = 1; i < len; i += 2) {
+			if (data[i]) {
+				utf16 = false;
+				break;
+			}
+		}
+	}
+
+	/* Number of characters */
+	n = utf16 ? (len >> 1) : len;
+
+	/* Tolerate a single trailing NUL */
+	if (n && !data[utf16 ? 2 * (n - 1) : n - 1])
+		n--;
+
+	if (!n)
+		return -ENOENT;
+
+	str = malloc(n + 1);
+	if (!str)
+		return -ENOMEM;
+
+	if (utf16) {
+		for (i = 0; i < n; ++i)
+			str[i] = data[i << 1];
+	} else {
+		for (i = 0; i < n; ++i)
+			str[i] = data[i];
+	}
+
+	str[n] = '\0';
+
+	/* An embedded NUL would silently truncate the token list */
+	if (strlen(str) != n) {
+		free(str);
+		return -EINVAL;
+	}
+
+	*out = str;
+
+	return 0;
+}
+
+/**
+ * qcom_get_vendor_dtbo_from_efivar() - Reads VendorDtbOverlays efi variable
+ * @out: Returns a malloc()'d NUL-terminated token string
+ *
+ * Return: 0 on success, error code on failure
+ */
+static int qcom_get_vendor_dtbo_from_efivar(char **out)
+{
+	u8 data[QCOM_VENDOR_DTBO_EFIVAR_MAX_LEN];
+	efi_uintn_t data_size = sizeof(data);
+	u32 attributes;
+	u64 timep;
+	int ret = -ENOENT;
+	efi_status_t status;
+
+	status = efi_init_obj_list();
+	if (status) {
+		log_err("Failed to initialize EFI variables: %lx\n", status);
+		return -EIO;
+	}
+	status = efi_get_variable_int(qcom_vendor_dtbo_efivar_name,
+				      &qcom_vendor_dtbo_efivar_guid,
+				      &attributes,
+				      &data_size,
+				      data,
+				      &timep);
+	if (status) {
+		log_err("Failed to read EFI VendorDtbOverlays: %lx\n", status);
+		if (status == EFI_NOT_FOUND)
+			return -ENOENT;
+		else if (status == EFI_BUFFER_TOO_SMALL)
+			return -E2BIG;
+		else
+			return -EINVAL;
+	}
+	ret = qcom_efivar_payload_to_str(data,
+					 data_size,
+					 out);
+	if (ret)
+		log_err("EFI variable VendorDtbOverlays contains invalid data\n");
+	return ret;
+}
+#endif
 
 /**
  * add_to_bucket() - Add a node name to the bucket list
@@ -351,26 +476,40 @@ static int qcom_add_dtbo_tokens(const char *str, struct list_head *bucket_head)
 }
 
 /**
- * qcom_parse_vendor_dtbo() - Parse vendor_dtbo environment variable
+ * qcom_parse_vendor_dtbo() - Parse the vendor DTBO overlay identifiers
  * @bucket_head: Bucket list to add overlay tokens to
  *
- * Reads the "vendor_dtbo" environment variable and parses its comma-separated
- * overlay identifiers, adding them to the bucket list for FIT configuration
- * matching. This influences which FIT configuration is selected.
+ * Reads the comma-separated overlay identifiers from the "vendor_dtbo"
+ * environment variable falling back to the "VendorDtbOverlays" EFI variable.
+ * Adds the identifiers read to the bucket list for FIT configuration matching.
+ * This influences which FIT configuration is selected.
  *
- * Return: 0 on success, negative error code on failure or if unset
+ * Return: 0 on success, negative error code on failure
  */
 static int qcom_parse_vendor_dtbo(struct list_head *bucket_head)
 {
-	const char *vendor_dtbo;
+	const char *vendor_dtbo_env;
+	int ret = -ENOENT;
 
-	vendor_dtbo = env_get("vendor_dtbo");
-	if (!vendor_dtbo || !*vendor_dtbo)
-		return -ENOENT;
+	vendor_dtbo_env = env_get("vendor_dtbo");
+	if (vendor_dtbo_env && *vendor_dtbo_env) {
+		log_info("ENV vendor_dtbo data: %s\n", vendor_dtbo_env);
+		return qcom_add_dtbo_tokens(vendor_dtbo_env, bucket_head);
+	}
 
-	log_info("vendor_dtbo: %s\n", vendor_dtbo);
+#if (CONFIG_IS_ENABLED(EFI_VARIABLE_FILE_STORE))
+	{
+		char *vendor_dtbo_overlay_efi = NULL;
 
-	return qcom_add_dtbo_tokens(vendor_dtbo, bucket_head);
+		ret = qcom_get_vendor_dtbo_from_efivar(&vendor_dtbo_overlay_efi);
+		if (!ret) {
+			log_info("EFI vendor_dtbo data: %s\n", vendor_dtbo_overlay_efi);
+			ret = qcom_add_dtbo_tokens(vendor_dtbo_overlay_efi, bucket_head);
+			free(vendor_dtbo_overlay_efi);
+		}
+	}
+#endif
+	return ret;
 }
 
 /**
@@ -1009,9 +1148,9 @@ free_overlays:
  * 6. Load DTB and apply overlays
  * 7. Install FDT for EFI
  *
- * Return: 0 on success, negative error code on failure
+ * Return: 0 always, to prevent boot failure
  */
-int qcom_fit_multidtb_setup(void)
+static int qcom_fit_multidtb_setup(void)
 {
 	void *fit = NULL;
 	size_t fit_size = 0;
@@ -1122,5 +1261,13 @@ cleanup_fit:
 	if (fit)
 		free(fit);
 
-	return ret;
+	if (ret)
+		log_err("FIT multi-DTB selection not available or failed\n");
+
+	return 0;
 }
+
+/* Try FIT multi-DTB selection if enabled */
+#if CONFIG_IS_ENABLED(QCOM_FIT_MULTIDTB)
+EVENT_SPY_SIMPLE(EVT_POST_PREBOOT, qcom_fit_multidtb_setup);
+#endif

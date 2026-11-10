@@ -40,22 +40,4 @@ enum node_process_type {
 	NODE_TYPE_SOFTSKU,
 };
 
-/* Function prototypes */
-
-/**
- * qcom_fit_multidtb_setup() - Main entry point for FIT multi-DTB selection
- *
- * This function:
- * 1. Loads qclinux_fit.img from EFI partition
- * 2. Extracts metadata DTB
- * 3. Detects hardware parameters from SMEM
- * 4. Builds bucket list from metadata
- * 5. Finds matching FIT configuration
- * 6. Loads DTB and applies overlays
- * 7. Sets FDT for EFI
- *
- * Return: 0 on success, negative error code on failure
- */
-int qcom_fit_multidtb_setup(void);
-
 #endif /* __QCOM_FIT_MULTIDTB_H__ */
