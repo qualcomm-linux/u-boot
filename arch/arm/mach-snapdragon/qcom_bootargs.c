@@ -26,6 +26,8 @@
 /* mmc dev 0 is this board's single eMMC boot device */
 #define QCOM_BOOTARGS_MMC_DEV	0
 #define QCOM_BOOTARGS_ROOT_PART	"system"
+/* LE-variant rootfs used for a recovery boot (ABL: GetSystemPath()) */
+#define QCOM_BOOTARGS_RECOVERY_ROOT_PART	"recoveryfs"
 
 /*
  * HLOS's own boot.scr already sets a "console", "androidboot.console",
@@ -126,7 +128,8 @@ static const struct qcom_bootargs_static_arg qcom_bootargs_static[] = {
  */
 #define QCOM_BOOTARGS_CMDLINE_SIZE	1024
 
-static int qcom_root_cmdline_arg(char *out, size_t outlen)
+static int qcom_root_cmdline_arg(const char *root_part, char *out,
+				 size_t outlen)
 {
 	struct blk_desc *desc;
 	struct disk_partition info;
@@ -136,7 +139,7 @@ static int qcom_root_cmdline_arg(char *out, size_t outlen)
 	if (!desc)
 		return log_msg_ret("blk", -ENODEV);
 
-	part = part_get_info_by_name(desc, QCOM_BOOTARGS_ROOT_PART, &info);
+	part = part_get_info_by_name(desc, root_part, &info);
 	if (part < 0)
 		return log_msg_ret("part", part);
 
@@ -198,11 +201,17 @@ static void qcom_serialno_cmdline_arg(char *out, size_t outlen)
 }
 
 /*
- * Consumes the env var "reboot-mode", already populated at EVT_LAST_STAGE_INIT
- * by the existing nvmem-reboot-mode / qcom-spmi-sdam driver chain (see
- * arch/arm/dts/pmk8550.dtsi's "reboot-mode" node) from the PMIC's reboot
- * reason SDAM cell. This is the U-Boot equivalent of ABL's GetRebootReason()
- * RECOVERY_MODE check.
+ * Recovery is requested if the env var "reboot-mode", already populated at
+ * EVT_LAST_STAGE_INIT by the existing nvmem-reboot-mode / qcom-spmi-sdam
+ * driver chain (see arch/arm/dts/pmk8550.dtsi's "reboot-mode" node) from
+ * the PMIC's reboot reason SDAM cell, is "recovery". This is the U-Boot
+ * equivalent of ABL's GetRebootReason() RECOVERY_MODE check.
+ *
+ * ABL's RecoveryInit() additionally honours a "boot-recovery" command in
+ * the misc partition. That is intentionally not ported: its only writers
+ * in ABL are the fastboot "reboot-recovery"/"reboot-fastboot" commands and
+ * Android-style userspace, none of which exist on this board, and nothing
+ * clears it, so a stale message would force recovery on every boot.
  */
 static bool qcom_recovery_requested(void)
 {
@@ -266,6 +275,7 @@ const char *board_fdt_chosen_bootargs(const struct fdt_property *fdt_ba)
 	char bootdevice[32] = "";
 	const char *env_bootargs = env_get("bootargs");
 	unsigned int i;
+	bool recovery;
 
 	/*
 	 * Base is whatever the kernel DTS already baked into /chosen/bootargs
@@ -284,7 +294,11 @@ const char *board_fdt_chosen_bootargs(const struct fdt_property *fdt_ba)
 				      qcom_bootargs_static[i].arg,
 				      qcom_bootargs_static[i].val);
 
-	if (!qcom_root_cmdline_arg(root_arg, sizeof(root_arg))) {
+	recovery = qcom_recovery_requested();
+
+	if (!qcom_root_cmdline_arg(recovery ? QCOM_BOOTARGS_RECOVERY_ROOT_PART :
+				   QCOM_BOOTARGS_ROOT_PART,
+				   root_arg, sizeof(root_arg))) {
 		qcom_cmdline_set_arg(cmdline, sizeof(cmdline), "root", root_arg);
 		qcom_cmdline_set_arg(cmdline, sizeof(cmdline), "rootwait",
 				      BOOTFLOWCL_EMPTY);
@@ -303,9 +317,14 @@ const char *board_fdt_chosen_bootargs(const struct fdt_property *fdt_ba)
 	else
 		log_warning("could not determine androidboot.bootdevice=\n");
 
-	qcom_cmdline_set_arg(cmdline, sizeof(cmdline),
-			      "androidboot.force_normal_boot",
-			      qcom_recovery_requested() ? "0" : "1");
+	/*
+	 * Like ABL (UpdateCmdLine.c), only a normal boot carries
+	 * androidboot.force_normal_boot=1; a recovery boot omits the
+	 * argument rather than setting it to 0.
+	 */
+	if (!recovery)
+		qcom_cmdline_set_arg(cmdline, sizeof(cmdline),
+				      "androidboot.force_normal_boot", "1");
 
 	qcom_cmdline_set_arg(cmdline, sizeof(cmdline), "silent_boot.mode",
 			      qcom_silent_boot_mode_cmdline_arg());
