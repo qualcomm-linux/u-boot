@@ -52,8 +52,9 @@ struct reboot_mode_ops {
 	 *
 	 * Unlike get()/set(), which persist a value for the next boot to
 	 * consume, trigger() performs the reset immediately. On success it
-	 * does not return. Drivers with a backing store (nvmem, gpio, rtc)
-	 * leave this NULL.
+	 * does not return, so a driver must return a -ve value if it fails to
+	 * reset. Drivers with a backing store (nvmem, gpio, rtc) leave this
+	 * NULL.
 	 *
 	 * @dev:	Device to trigger
 	 * @magic:	Array of @count 32-bit magic cells describing the mode
@@ -61,7 +62,7 @@ struct reboot_mode_ops {
 	 *		REBOOT_MODE_MAX_MAGIC)
 	 * Return: does not return on success; -ve on error
 	 */
-	int (*trigger)(struct udevice *dev, const u32 *magic, int count);
+	int (*trigger)(struct udevice *dev, const u32 *magic, uint count);
 };
 
 /* Access the operations for a reboot mode device */
@@ -76,27 +77,32 @@ struct reboot_mode_ops {
 int dm_reboot_mode_update(struct udevice *dev);
 
 /**
+ * reboot_mode_find() - find a triggerable reboot mode by name
+ *
+ * Search every UCLASS_REBOOT_MODE device whose driver implements the trigger
+ * op for a mode called @name. If several devices declare the same name, the
+ * first one found wins.
+ *
+ * @name:	Mode name (without the device tree "mode-" prefix)
+ * @devp:	Returns the device owning the mode (may be NULL)
+ * @modep:	Returns the mode (may be NULL)
+ * Return: 0 if found, -ENOENT if no device declares a triggerable mode
+ *	   called @name
+ */
+int reboot_mode_find(const char *name, struct udevice **devp,
+		     const struct reboot_mode_mode **modep);
+
+/**
  * reboot_mode_request() - reset the system into a named mode
  *
- * Search every UCLASS_REBOOT_MODE device for a mode named @name and, if the
- * owning device supports triggering, reset into it. On success this does not
- * return.
+ * Find the mode with reboot_mode_find() and, if found, reset into it. On
+ * success this does not return.
  *
  * @name:	Mode name (without the device tree "mode-" prefix)
  * Return: does not return on success; -ENOENT if no device declares a
- *	   triggerable mode called @name; other -ve on error
+ *	   triggerable mode called @name; -EIO if the driver returned without
+ *	   resetting; other -ve on error
  */
 int reboot_mode_request(const char *name);
-
-/**
- * reboot_mode_list() - print all triggerable reboot modes
- *
- * Enumerate every UCLASS_REBOOT_MODE device and print the name of each mode
- * that can be triggered (i.e. whose device implements the trigger op). Modes
- * that only exist to be read from a backing store on boot are not listed.
- *
- * Return: 0 if OK, -ve on error
- */
-int reboot_mode_list(void);
 
 #endif /* REBOOT_MODE_REBOOT_MODE_H__ */
