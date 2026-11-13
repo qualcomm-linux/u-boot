@@ -442,6 +442,33 @@ static int xgmac_adjust_link(struct udevice *dev)
 	}
 
 	switch (xgmac->phy->speed) {
+	case SPEED_10000:
+		en_calibration = true;
+		clrsetbits_le32(&xgmac->mac_regs->tx_configuration,
+				0x7 << XGMAC_MAC_CONF_SS_SHIFT,
+				XGMAC_MAC_CONF_SS_10G_XGMII <<
+				XGMAC_MAC_CONF_SS_SHIFT);
+		ret = 0;
+		break;
+	case SPEED_5000:
+		en_calibration = true;
+		clrsetbits_le32(&xgmac->mac_regs->tx_configuration,
+				0x7 << XGMAC_MAC_CONF_SS_SHIFT,
+				XGMAC_MAC_CONF_SS_5G_XGMII <<
+				XGMAC_MAC_CONF_SS_SHIFT);
+		ret = 0;
+		break;
+	case SPEED_2500:
+		en_calibration = true;
+		clrsetbits_le32(&xgmac->mac_regs->tx_configuration,
+				0x7 << XGMAC_MAC_CONF_SS_SHIFT,
+				(xgmac->config->interface(dev) ==
+				 PHY_INTERFACE_MODE_2500BASEX ?
+				 XGMAC_MAC_CONF_SS_2_5G_GMII :
+				 XGMAC_MAC_CONF_SS_2_5G_XGMII) <<
+				XGMAC_MAC_CONF_SS_SHIFT);
+		ret = 0;
+		break;
 	case SPEED_1000:
 		en_calibration = true;
 		ret = xgmac_set_gmii_speed(dev);
@@ -551,6 +578,13 @@ static int xgmac_get_phy_addr(struct xgmac_priv *priv, struct udevice *dev)
 	reg = ofnode_read_u32_default(phandle_args.node, "reg", 0);
 
 	return reg;
+}
+
+static bool xgmac_phy_is_clause45(struct xgmac_priv *priv)
+{
+	return ofnode_valid(priv->phy_of_node) &&
+		ofnode_device_is_compatible(priv->phy_of_node,
+					    "ethernet-phy-ieee802.3-c45");
 }
 
 /*
@@ -1277,6 +1311,18 @@ static void xgmac_restore_mac_speed(struct xgmac_priv *xgmac)
 		return;
 
 	switch (xgmac->phy->speed) {
+	case SPEED_10000:
+		ss = XGMAC_MAC_CONF_SS_10G_XGMII;
+		break;
+	case SPEED_5000:
+		ss = XGMAC_MAC_CONF_SS_5G_XGMII;
+		break;
+	case SPEED_2500:
+		ss = xgmac->config->interface(xgmac->dev) ==
+			PHY_INTERFACE_MODE_2500BASEX ?
+			XGMAC_MAC_CONF_SS_2_5G_GMII :
+			XGMAC_MAC_CONF_SS_2_5G_XGMII;
+		break;
 	case SPEED_1000:
 		ss = XGMAC_MAC_CONF_SS_1G_GMII;
 		break;
@@ -2056,7 +2102,8 @@ static int xgmac_start(struct udevice *dev)
 			goto err_stop_resets;
 		}
 
-		if (xgmac->config->phy_force_c45) {
+		if (xgmac_phy_is_clause45(xgmac)) {
+			debug("%s: PHY DT compatible selects Clause 45\n", dev->name);
 			ret = phy_force_clause45(xgmac->phy);
 			if (ret) {
 				pr_err("%s phy_force_clause45() failed: %d\n",
