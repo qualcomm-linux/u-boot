@@ -13,7 +13,6 @@
 #include <hang.h>
 #include <log.h>
 #include <regmap.h>
-#include <reboot-mode/reboot-mode.h>
 #include <spl.h>
 #include <sysreset.h>
 #include <dm/device-internal.h>
@@ -126,32 +125,8 @@ int do_reset(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 	if (argc > 2)
 		return CMD_RET_USAGE;
 
-	if (argc == 2 && argv[1][0] == '-' && argv[1][1] == 'w' &&
-	    !argv[1][2]) {
+	if (argc == 2 && argv[1][0] == '-' && argv[1][1] == 'w') {
 		reset_type = SYSRESET_WARM;
-	} else if (CONFIG_IS_ENABLED(DM_REBOOT_MODE) && argc == 2 &&
-		   argv[1][0] == '-') {
-		/*
-		 * "reset -l" lists the modes registered with the reboot-mode
-		 * framework; "reset -<mode>" triggers a named mode (for
-		 * example "reset -edl"). The mode magic values live in the
-		 * device tree.
-		 */
-		const char *name = &argv[1][1];
-
-		if (!strcmp(name, "l"))
-			return reboot_mode_list() ? CMD_RET_FAILURE :
-						    CMD_RET_SUCCESS;
-
-		printf("resetting into \"%s\" mode ...\n", name);
-		mdelay(100);
-
-		/* Does not return on success. */
-		reboot_mode_request(name);
-
-		printf("Unknown reset mode \"%s\"\n", name);
-		reboot_mode_list();
-		return CMD_RET_USAGE;
 	}
 
 	printf("resetting ...\n");

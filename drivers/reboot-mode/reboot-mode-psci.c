@@ -12,28 +12,23 @@
 #include <linux/errno.h>
 
 static int psci_reboot_mode_trigger(struct udevice *dev, const u32 *magic,
-				    int count)
+				    uint count)
 {
 	u32 reset_type = magic[0];
-	u64 cookie = 0;
-	int i;
+	u32 cookie = 0;
 
 	if (count < 1 || count > REBOOT_MODE_MAX_MAGIC)
 		return -EINVAL;
 
-	/*
-	 * U-Boot's psci_system_reset2() takes only a 32-bit cookie, whereas
-	 * the binding allows a 64-bit cookie in the 3-cell form (magic[1] is
-	 * cookie_hi, magic[2] is cookie_lo). Reject a non-zero high half
-	 * rather than silently truncating it.
-	 */
+	/* psci_system_reset2() takes a 32-bit cookie; reject cookie_hi != 0 */
 	if (count == REBOOT_MODE_MAX_MAGIC && magic[1]) {
 		dev_err(dev, "64-bit reset cookie is not supported\n");
 		return -EINVAL;
 	}
 
-	for (i = 1; i < count; i++)
-		cookie = (cookie << 32) | magic[i];
+	/* The cookie is the last cell */
+	if (count >= 2)
+		cookie = magic[count - 1];
 
 	if (psci_features(ARM_PSCI_1_1_FN64_SYSTEM_RESET2) !=
 	    ARM_PSCI_RET_SUCCESS) {
@@ -41,10 +36,8 @@ static int psci_reboot_mode_trigger(struct udevice *dev, const u32 *magic,
 		return -EPROTONOSUPPORT;
 	}
 
-	/* Does not return on success. */
-	psci_system_reset2(reset_type, (u32)cookie);
-
-	return -EINPROGRESS;
+	/* Does not return */
+	psci_system_reset2(reset_type, cookie);
 }
 
 static const struct reboot_mode_ops psci_reboot_mode_ops = {

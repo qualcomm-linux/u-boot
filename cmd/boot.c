@@ -8,8 +8,12 @@
  * Misc boot support
  */
 #include <command.h>
+#include <dm.h>
 #include <net.h>
+#include <time.h>
 #include <vsprintf.h>
+#include <linux/delay.h>
+#include <reboot-mode/reboot-mode.h>
 
 #ifdef CONFIG_CMD_GO
 
@@ -56,13 +60,73 @@ U_BOOT_CMD(
 
 #endif
 
+static int reset_list_modes(void)
+{
+	const struct reboot_mode_uclass_platdata *plat_data;
+	struct reboot_mode_ops *ops;
+	struct udevice *dev;
+	int i, found = 0;
+
+	uclass_foreach_dev_probe(UCLASS_REBOOT_MODE, dev) {
+		ops = reboot_mode_get_ops(dev);
+		if (!ops || !ops->trigger)
+			continue;
+
+		plat_data = dev_get_uclass_plat(dev);
+		for (i = 0; i < plat_data->count; i++) {
+			if (!found++)
+				printf("Available reset modes:\n");
+			printf("  %s\n", plat_data->modes[i].mode_name);
+		}
+	}
+
+	if (!found)
+		printf("No reset modes available\n");
+
+	return CMD_RET_SUCCESS;
+}
+
+static int reset_to_mode(const char *name)
+{
+	if (reboot_mode_find(name, NULL, NULL)) {
+		printf("Unknown reset mode \"%s\"\n", name);
+		reset_list_modes();
+
+		return CMD_RET_FAILURE;
+	}
+
+	printf("resetting into \"%s\" mode ...\n", name);
+	mdelay(100);
+
+	/* Does not return on success */
+	reboot_mode_request(name);
+
+	printf("Failed to reset into \"%s\" mode\n", name);
+
+	return CMD_RET_FAILURE;
+}
+
+static int do_reset_cmd(struct cmd_tbl *cmdtp, int flag, int argc,
+			char *const argv[])
+{
+	if (IS_ENABLED(CONFIG_DM_REBOOT_MODE) && argc > 1) {
+		if (!strcmp(argv[1], "-l") && argc == 2)
+			return reset_list_modes();
+		if (!strcmp(argv[1], "-m"))
+			return argc == 3 ? reset_to_mode(argv[2]) :
+					   CMD_RET_USAGE;
+	}
+
+	return do_reset(cmdtp, flag, argc, argv);
+}
+
 U_BOOT_CMD(
-	reset, 2, 0,	do_reset,
+	reset, 3, 0,	do_reset_cmd,
 	"Perform RESET of the CPU",
 	"- cold boot without level specifier\n"
 	"reset -w - warm reset if implemented\n"
 #if IS_ENABLED(CONFIG_DM_REBOOT_MODE)
-	"reset -<mode> - reset into a mode declared in the device tree\n"
+	"reset -m <mode> - reset into a mode declared in the device tree\n"
 	"reset -l - list the available reset modes\n"
 #endif
 );

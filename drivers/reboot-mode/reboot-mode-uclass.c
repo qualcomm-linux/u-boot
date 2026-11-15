@@ -55,7 +55,8 @@ int dm_reboot_mode_update(struct udevice *dev)
 	return 0;
 }
 
-int reboot_mode_request(const char *name)
+int reboot_mode_find(const char *name, struct udevice **devp,
+		     const struct reboot_mode_mode **modep)
 {
 	const struct reboot_mode_uclass_platdata *plat_data;
 	struct reboot_mode_ops *ops;
@@ -72,35 +73,34 @@ int reboot_mode_request(const char *name)
 			if (strcmp(plat_data->modes[i].mode_name, name))
 				continue;
 
-			/* Does not return on success. */
-			return ops->trigger(dev, plat_data->modes[i].magic,
-					    plat_data->modes[i].count);
+			if (devp)
+				*devp = dev;
+			if (modep)
+				*modep = &plat_data->modes[i];
+
+			return 0;
 		}
 	}
 
 	return -ENOENT;
 }
 
-int reboot_mode_list(void)
+int reboot_mode_request(const char *name)
 {
-	const struct reboot_mode_uclass_platdata *plat_data;
+	const struct reboot_mode_mode *mode;
 	struct reboot_mode_ops *ops;
 	struct udevice *dev;
-	int i;
+	int ret;
 
-	printf("Available reset modes:\n");
+	ret = reboot_mode_find(name, &dev, &mode);
+	if (ret)
+		return ret;
 
-	uclass_foreach_dev_probe(UCLASS_REBOOT_MODE, dev) {
-		ops = reboot_mode_get_ops(dev);
-		if (!ops || !ops->trigger)
-			continue;
+	ops = reboot_mode_get_ops(dev);
+	ret = ops->trigger(dev, mode->magic, mode->count);
 
-		plat_data = dev_get_uclass_plat(dev);
-		for (i = 0; i < plat_data->count; i++)
-			printf("  %s\n", plat_data->modes[i].mode_name);
-	}
-
-	return 0;
+	/* trigger() must not return success: the system should have reset */
+	return ret ? ret : -EIO;
 }
 
 int dm_reboot_mode_pre_probe(struct udevice *dev)
