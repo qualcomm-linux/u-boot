@@ -557,6 +557,10 @@ static int eqos_adjust_link(struct udevice *dev)
 	}
 
 	switch (eqos->phy->speed) {
+	case SPEED_2500:
+		en_calibration = true;
+		ret = eqos_set_gmii_speed(dev);
+		break;
 	case SPEED_1000:
 		en_calibration = true;
 		ret = eqos_set_gmii_speed(dev);
