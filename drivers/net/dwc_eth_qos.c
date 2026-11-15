@@ -936,11 +936,11 @@ static int eqos_start(struct udevice *dev)
 	/* Configure DMA */
 
 	/* Enable OSP mode */
-	setbits_le32(&eqos->dma_regs->ch0_tx_control,
+	setbits_le32(&eqos->dma_ch_regs->ch0_tx_control,
 		     EQOS_DMA_CH0_TX_CONTROL_OSP);
 
 	/* RX buffer size. Must be a multiple of bus width */
-	clrsetbits_le32(&eqos->dma_regs->ch0_rx_control,
+	clrsetbits_le32(&eqos->dma_ch_regs->ch0_rx_control,
 			EQOS_DMA_CH0_RX_CONTROL_RBSZ_MASK <<
 			EQOS_DMA_CH0_RX_CONTROL_RBSZ_SHIFT,
 			EQOS_MAX_PACKET_SIZE <<
@@ -949,7 +949,7 @@ static int eqos_start(struct udevice *dev)
 	desc_pad = (eqos->desc_size - sizeof(struct eqos_desc)) /
 		   eqos->config->axi_bus_width;
 
-	setbits_le32(&eqos->dma_regs->ch0_control,
+	setbits_le32(&eqos->dma_ch_regs->ch0_control,
 		     EQOS_DMA_CH0_CONTROL_PBLX8 |
 		     (desc_pad << EQOS_DMA_CH0_CONTROL_DSL_SHIFT));
 
@@ -962,12 +962,12 @@ static int eqos_start(struct udevice *dev)
 	pbl = tqs + 1;
 	if (pbl > 32)
 		pbl = 32;
-	clrsetbits_le32(&eqos->dma_regs->ch0_tx_control,
+	clrsetbits_le32(&eqos->dma_ch_regs->ch0_tx_control,
 			EQOS_DMA_CH0_TX_CONTROL_TXPBL_MASK <<
 			EQOS_DMA_CH0_TX_CONTROL_TXPBL_SHIFT,
 			pbl << EQOS_DMA_CH0_TX_CONTROL_TXPBL_SHIFT);
 
-	clrsetbits_le32(&eqos->dma_regs->ch0_rx_control,
+	clrsetbits_le32(&eqos->dma_ch_regs->ch0_rx_control,
 			EQOS_DMA_CH0_RX_CONTROL_RXPBL_MASK <<
 			EQOS_DMA_CH0_RX_CONTROL_RXPBL_SHIFT,
 			8 << EQOS_DMA_CH0_RX_CONTROL_RXPBL_SHIFT);
@@ -1001,16 +1001,16 @@ static int eqos_start(struct udevice *dev)
 	}
 
 	addr64 = (ulong)eqos_get_desc(eqos, 0, false);
-	writel(upper_32_bits(addr64), &eqos->dma_regs->ch0_txdesc_list_haddress);
-	writel(lower_32_bits(addr64), &eqos->dma_regs->ch0_txdesc_list_address);
+	writel(upper_32_bits(addr64), &eqos->dma_ch_regs->ch0_txdesc_list_haddress);
+	writel(lower_32_bits(addr64), &eqos->dma_ch_regs->ch0_txdesc_list_address);
 	writel(EQOS_DESCRIPTORS_TX - 1,
-	       &eqos->dma_regs->ch0_txdesc_ring_length);
+	       &eqos->dma_ch_regs->ch0_txdesc_ring_length);
 
 	addr64 = (ulong)eqos_get_desc(eqos, 0, true);
-	writel(upper_32_bits(addr64), &eqos->dma_regs->ch0_rxdesc_list_haddress);
-	writel(lower_32_bits(addr64), &eqos->dma_regs->ch0_rxdesc_list_address);
+	writel(upper_32_bits(addr64), &eqos->dma_ch_regs->ch0_rxdesc_list_haddress);
+	writel(lower_32_bits(addr64), &eqos->dma_ch_regs->ch0_rxdesc_list_address);
 	writel(EQOS_DESCRIPTORS_RX - 1,
-	       &eqos->dma_regs->ch0_rxdesc_ring_length);
+	       &eqos->dma_ch_regs->ch0_rxdesc_ring_length);
 
 	/*
 	 * Point TX tail pointer at the first descriptor, implying no descriptor
@@ -1018,19 +1018,19 @@ static int eqos_start(struct udevice *dev)
 	 * a packet in eqos_send().
 	 */
 	addr64 = (ulong)eqos_get_desc(eqos, 0, false);
-	writel(lower_32_bits(addr64), &eqos->dma_regs->ch0_txdesc_tail_pointer);
+	writel(lower_32_bits(addr64), &eqos->dma_ch_regs->ch0_txdesc_tail_pointer);
 
 	/*
 	 * Point RX tail pointer at the last descriptor, implying all
 	 * descriptors are owned by the DMA.
 	 */
 	addr64 = (ulong)eqos_get_desc(eqos, EQOS_DESCRIPTORS_RX - 1, true);
-	writel(lower_32_bits(addr64), &eqos->dma_regs->ch0_rxdesc_tail_pointer);
+	writel(lower_32_bits(addr64), &eqos->dma_ch_regs->ch0_rxdesc_tail_pointer);
 
 	/* Enable everything */
-	setbits_le32(&eqos->dma_regs->ch0_tx_control,
+	setbits_le32(&eqos->dma_ch_regs->ch0_tx_control,
 		     EQOS_DMA_CH0_TX_CONTROL_ST);
-	setbits_le32(&eqos->dma_regs->ch0_rx_control,
+	setbits_le32(&eqos->dma_ch_regs->ch0_rx_control,
 		     EQOS_DMA_CH0_RX_CONTROL_SR);
 	setbits_le32(&eqos->mac_regs->configuration,
 		     EQOS_MAC_CONFIGURATION_TE | EQOS_MAC_CONFIGURATION_RE);
@@ -1062,7 +1062,7 @@ static void eqos_stop(struct udevice *dev)
 	eqos->reg_access_ok = false;
 
 	/* Disable TX DMA */
-	clrbits_le32(&eqos->dma_regs->ch0_tx_control,
+	clrbits_le32(&eqos->dma_ch_regs->ch0_tx_control,
 		     EQOS_DMA_CH0_TX_CONTROL_ST);
 
 	/* Wait for TX all packets to drain out of MTL */
@@ -1091,7 +1091,7 @@ static void eqos_stop(struct udevice *dev)
 	}
 
 	/* Turn off RX DMA */
-	clrbits_le32(&eqos->dma_regs->ch0_rx_control,
+	clrbits_le32(&eqos->dma_ch_regs->ch0_rx_control,
 		     EQOS_DMA_CH0_RX_CONTROL_SR);
 
 	if (eqos->phy) {
@@ -1130,7 +1130,7 @@ static int eqos_send(struct udevice *dev, void *packet, int length)
 	eqos->config->ops->eqos_flush_desc(tx_desc);
 
 	writel(lower_32_bits((ulong)eqos_get_desc(eqos, eqos->tx_desc_idx, false)),
-	       &eqos->dma_regs->ch0_txdesc_tail_pointer);
+	       &eqos->dma_ch_regs->ch0_txdesc_tail_pointer);
 
 	for (i = 0; i < 1000000; i++) {
 		eqos->config->ops->eqos_inval_desc(tx_desc);
@@ -1212,7 +1212,7 @@ static int eqos_free_pkt(struct udevice *dev, uchar *packet, int length)
 			eqos->config->ops->eqos_flush_desc(rx_desc);
 		}
 		writel(lower_32_bits((ulong)rx_desc),
-		       &eqos->dma_regs->ch0_rxdesc_tail_pointer);
+		       &eqos->dma_ch_regs->ch0_rxdesc_tail_pointer);
 	}
 
 	eqos->rx_desc_idx++;
@@ -1435,8 +1435,11 @@ static fdt_addr_t eqos_get_base_addr_common(struct udevice *dev, fdt_addr_t addr
 
 	eqos->regs = addr;
 	eqos->mac_regs = (void *)(addr + EQOS_MAC_REGS_BASE);
-	eqos->mtl_regs = (void *)(addr + EQOS_MTL_REGS_BASE);
+	eqos->mtl_regs = (void *)(addr + (eqos->config->mtl_regs_base ?:
+					   EQOS_MTL_REGS_BASE));
 	eqos->dma_regs = (void *)(addr + EQOS_DMA_REGS_BASE);
+	eqos->dma_ch_regs = (void *)(addr + (eqos->config->dma_ch_regs_base ?:
+					      EQOS_DMA_CH_REGS_BASE));
 
 	return 0;
 }
