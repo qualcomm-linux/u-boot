@@ -1662,6 +1662,10 @@ static const struct udevice_id eqos_ids[] = {
 		.compatible = "qcom,qcs404-ethqos",
 		.data = (ulong)&eqos_qcom_config
 	},
+	{
+		.compatible = "qcom,sa8775p-ethqos",
+		.data = (ulong)&eqos_sa8775p_config
+	},
 #endif
 #if IS_ENABLED(CONFIG_DWC_ETH_QOS_STARFIVE)
 	{
