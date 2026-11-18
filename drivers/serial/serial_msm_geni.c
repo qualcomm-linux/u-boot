@@ -650,12 +650,18 @@ static int msm_serial_probe(struct udevice *dev)
 	geni_serial_init(dev);
 	msm_geni_serial_setup_rx(dev);
 	qcom_geni_serial_start_rx(dev);
-	qcom_geni_serial_start_tx(priv->base);
 
-	if (CONFIG_IS_ENABLED(MSM_GENI_SERIAL_CABLE_DETECT))
+	if (CONFIG_IS_ENABLED(MSM_GENI_SERIAL_CABLE_DETECT)) {
 		priv->cable_connected = qcom_geni_serial_is_cable_connected(priv->base);
-	else
+		if (!priv->cable_connected) {
+			gd->flags |= GD_FLG_DISABLE_CONSOLE;
+			return 0;
+		}
+	} else {
 		priv->cable_connected = true;
+	}
+
+	qcom_geni_serial_start_tx(priv->base);
 
 	return 0;
 }

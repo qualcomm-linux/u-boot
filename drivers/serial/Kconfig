@@ -1049,6 +1049,15 @@ config MSM_GENI_SERIAL_CABLE_DETECT
 	  cable is connected to the debug UART port, and suppress UART TX
 	  output in that case to avoid driving an unterminated line.
 
+config SPL_MSM_GENI_SERIAL_CABLE_DETECT
+	bool "Detect GENI UART cable in SPL"
+	depends on SPL_MSM_GENI_SERIAL
+	default n
+	help
+	  Detect a UART RX-line BREAK condition in SPL to determine whether
+	  the debug UART cable is connected and suppress UART TX output when
+	  the UART is not connected.
+
 config MXS_AUART_SERIAL
 	bool "MXS AUART"
 	depends on DM_SERIAL

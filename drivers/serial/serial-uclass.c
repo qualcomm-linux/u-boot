@@ -201,6 +201,12 @@ int serial_init(void)
 		return 0;
 
 	serial_find_console_or_panic();
+	if (gd->flags & GD_FLG_DISABLE_CONSOLE) {
+		gd->cur_serial_dev = NULL;
+		gd->flags &= ~GD_FLG_SERIAL_READY;
+		return 0;
+	}
+
 	if (gd->cur_serial_dev)
 		gd->flags |= GD_FLG_SERIAL_READY;
 
