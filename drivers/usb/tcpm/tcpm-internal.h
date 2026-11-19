@@ -56,6 +56,7 @@
 #define GENERATE_TCPM_ENUM(e)		e
 #define GENERATE_TCPM_STRING(s)		#s
 #define TCPM_POLL_EVENT_TIME_OUT	2000
+#define TYPEC_NO_PREFERRED_ROLE		(-1)
 
 enum tcpm_state {
 	FOREACH_TCPM_STATE(GENERATE_TCPM_ENUM)
@@ -81,12 +82,14 @@ struct tcpm_port {
 	struct typec_partner *partner;
 
 	enum typec_cc_status cc_req;
+	enum typec_cc_status src_rp;	/* work only if pd_supported == false */
 	enum typec_cc_status cc1;
 	enum typec_cc_status cc2;
 	enum typec_cc_polarity polarity;
 
 	bool attached;
 	bool connected;
+	bool pd_supported;
 	int poll_event_cnt;
 	enum typec_port_type port_type;
 
