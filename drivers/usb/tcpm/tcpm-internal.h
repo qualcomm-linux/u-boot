@@ -57,6 +57,9 @@
 #define GENERATE_TCPM_STRING(s)		#s
 #define TCPM_POLL_EVENT_TIME_OUT	2000
 #define TYPEC_NO_PREFERRED_ROLE		(-1)
+/* Time for the port controller to report a partner after port init */
+#define TCPM_ATTACH_DETECT_TIME_MS	500
+#define TCPM_SETTLE_TIME_OUT_MS		2000
 
 enum tcpm_state {
 	FOREACH_TCPM_STATE(GENERATE_TCPM_ENUM)
@@ -91,6 +94,7 @@ struct tcpm_port {
 	bool connected;
 	bool pd_supported;
 	int poll_event_cnt;
+	unsigned long init_time;
 	enum typec_port_type port_type;
 
 	/*

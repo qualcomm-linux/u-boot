@@ -2255,6 +2255,7 @@ static int tcpm_port_init(struct udevice *dev)
 	port->port_type = port->typec_type;
 
 	tcpm_init(dev);
+	port->init_time = get_timer(0);
 
 	dev_info(dev, "TCPM: init finished\n");
 
@@ -2317,4 +2318,44 @@ int tcpm_post_probe(struct udevice *dev)
 	tcpm_poll_event(dev);
 
 	return 0;
+}
+
+static bool tcpm_port_is_settled(struct tcpm_port *port)
+{
+	switch (port->state) {
+	case TOGGLING:
+	case SRC_UNATTACHED:
+	case SNK_UNATTACHED:
+	case SRC_READY:
+	case SNK_READY:
+		return true;
+	default:
+		return false;
+	}
+}
+
+int tcpm_poll_until_settled(struct udevice *dev)
+{
+	const struct dm_tcpm_ops *drvops = dev_get_driver_ops(dev);
+	struct tcpm_port *port = dev_get_uclass_plat(dev);
+	unsigned long start = get_timer(0);
+
+	for (;;) {
+		drvops->poll_event(dev);
+		tcpm_check_and_run_delayed_work(dev);
+
+		if (tcpm_port_is_settled(port) &&
+		    get_timer(port->init_time) >= TCPM_ATTACH_DETECT_TIME_MS)
+			return 0;
+
+		if (get_timer(start) >= TCPM_SETTLE_TIME_OUT_MS)
+			break;
+
+		udelay(500);
+	}
+
+	dev_warn(dev, "TCPM: port did not settle, state %s\n",
+		 tcpm_states[port->state]);
+
+	return -ETIMEDOUT;
 }

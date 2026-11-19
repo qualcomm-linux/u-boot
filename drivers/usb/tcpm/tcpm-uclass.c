@@ -7,6 +7,7 @@
 
 #include <dm/device.h>
 #include <dm/device_compat.h>
+#include <dm/ofnode_graph.h>
 #include <dm/uclass.h>
 #include <linux/err.h>
 #include <usb/tcpm.h>
@@ -78,6 +79,23 @@ bool tcpm_is_connected(struct udevice *dev)
 int tcpm_get(int index, struct udevice **devp)
 {
 	return uclass_get_device(UCLASS_TCPM, index, devp);
+}
+
+int tcpm_get_by_usb_controller(struct udevice *usb_dev, struct udevice **devp)
+{
+	ofnode node = dev_ofnode(usb_dev);
+	ofnode connector;
+
+	/* The high-speed data bus is port 0 of a USB controller */
+	connector = ofnode_graph_get_remote_node(node, 0, -1);
+	if (!ofnode_valid(connector))
+		connector = ofnode_graph_get_remote_node(node, -1, -1);
+	if (!ofnode_valid(connector) ||
+	    !ofnode_device_is_compatible(connector, "usb-c-connector"))
+		return -ENODEV;
+
+	return uclass_get_device_by_ofnode(UCLASS_TCPM,
+					  ofnode_get_parent(connector), devp);
 }
 
 static int tcpm_post_bind(struct udevice *dev)
