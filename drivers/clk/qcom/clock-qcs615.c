@@ -18,6 +18,8 @@
 #define USB30_PRIM_MOCK_UTMI_CLK_CMD_RCGR	0xf034
 #define USB30_PRIM_MASTER_CLK_CMD_RCGR		0xf01c
 #define USB3_PRIM_PHY_AUX_CMD_RCGR		0xf060
+#define USB20_SEC_MASTER_CLK_CMD_RCGR		0xa601c
+#define USB20_SEC_MOCK_UTMI_CLK_CMD_RCGR	0xa6034
 
 #define UFS_PHY_AXI_CLK_CMD_RCGR		0x77020
 #define UFS_PHY_ICE_CORE_CLK_CMD_RCGR		0x77048
@@ -123,6 +125,14 @@ static ulong qcs615_set_rate(struct clk *clk, ulong rate)
 				     5, 0, 0, CFG_CLK_SRC_GPLL0, 8);
 		clk_rcg_set_rate(priv->base, USB3_PRIM_PHY_AUX_CMD_RCGR, 0, 0);
 		return rate;
+	case GCC_USB20_SEC_MOCK_UTMI_CLK:
+		WARN(rate != 19200000, "Unexpected rate for USB20_SEC_MOCK_UTMI_CLK: %lu\n", rate);
+		clk_rcg_set_rate(priv->base, USB20_SEC_MOCK_UTMI_CLK_CMD_RCGR, 0, CFG_CLK_SRC_CXO);
+		return rate;
+	case GCC_USB20_SEC_MASTER_CLK:
+		WARN(rate != 120000000, "Unexpected rate for USB20_SEC_MASTER_CLK: %lu\n", rate);
+		clk_rcg_set_rate(priv->base, USB20_SEC_MASTER_CLK_CMD_RCGR, 5, CFG_CLK_SRC_GPLL0);
+		return 120000000;
 
 	case GCC_UFS_PHY_AXI_CLK:
 		freq = qcom_find_freq(ftbl_gcc_ufs_phy_axi_clk_src, rate);
@@ -170,6 +180,12 @@ static const struct gate_clk qcs615_clks[] = {
 	GATE_CLK_POLLED(GCC_USB3_PRIM_PHY_COM_AUX_CLK, 0xf054, BIT(0), 0xf054),
 	GATE_CLK(GCC_USB3_PRIM_PHY_PIPE_CLK, 0xf058, BIT(0)),
 	GATE_CLK_POLLED(GCC_USB3_PRIM_CLKREF_CLK, 0x8c014, BIT(0), 0x8c014),
+	GATE_CLK_POLLED(GCC_CFG_NOC_USB2_SEC_AXI_CLK, 0xa609c, BIT(0), 0xa609c),
+	GATE_CLK_POLLED(GCC_USB20_SEC_MASTER_CLK, 0xa6010, BIT(0), 0xa6010),
+	GATE_CLK_POLLED(GCC_AGGRE_USB2_SEC_AXI_CLK, 0xa6084, BIT(0), 0xa6084),
+	GATE_CLK_POLLED(GCC_USB20_SEC_SLEEP_CLK, 0xa6014, BIT(0), 0xa6014),
+	GATE_CLK_POLLED(GCC_USB20_SEC_MOCK_UTMI_CLK, 0xa6018, BIT(0), 0xa6018),
+	GATE_CLK_POLLED(GCC_USB2_PRIM_CLKREF_CLK, 0x8c028, BIT(0), 0x8c028),
 	GATE_CLK_POLLED(GCC_AHB2PHY_WEST_CLK, 0x6a004, BIT(0), 0x6a004),
 
 	GATE_CLK(GCC_QUPV3_WRAP0_S0_CLK, 0x5200c, GCC_QUPV3_WRAP0_S0_CLK_ENA_BIT),
@@ -253,6 +269,7 @@ static const struct qcom_reset_map qcs615_gcc_resets[] = {
 
 static const struct qcom_power_map qcs615_gdscs[] = {
 	[UFS_PHY_GDSC] = { 0x77004 },
+	[USB20_SEC_GDSC] = { 0xa6004 },
 	[USB30_PRIM_GDSC] = { 0xf004 },
 };
 
