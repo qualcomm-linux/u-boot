@@ -39,6 +39,7 @@ struct geni_se_plat {
 };
 
 static int qcom_geni_fw_initialise(void);
+static int qcom_geni_get_fw(struct geni_se_plat *plat, void **fwp);
 
 /**
  * geni_enable_interrupts() Enable interrupts.
@@ -425,8 +426,13 @@ int qcom_geni_load_firmware(phys_addr_t qup_base,
 	/* The firmware blob is the private data of the GENI wrapper (parent) */
 	fw = dev_get_priv(dev->parent);
 	if (!fw) {
-		dev_err(dev, "QUP firmware not available\n");
-		return -ENOENT;
+		/* Not loaded yet: this SE is probed before EVT_LAST_STAGE_INIT */
+		ret = qcom_geni_get_fw(dev_get_plat(dev->parent), &fw);
+		if (ret) {
+			dev_err(dev, "QUP firmware not available\n");
+			return ret;
+		}
+		dev_set_priv(dev->parent, fw);
 	}
 
 	if (IS_ELF(*(Elf32_Ehdr *)fw)) {
@@ -554,45 +560,32 @@ static int probe_children_load_firmware(struct udevice *dev)
 
 #define MAX_FW_BUF_SIZE (128 * 1024)
 
-/*
- * Load firmware for QCOM GENI peripherals from the dedicated partition on storage and bind/probe
- * all the peripheral devices that need firmware to be loaded.
- */
-static int qcom_geni_fw_initialise(void)
-{
-	debug("Loading firmware for QCOM GENI SE\n");
-	struct udevice *geni_wrapper, *blk_dev;
-	struct disk_partition part_info;
-	int ret;
-	void *fw_buf;
-	size_t fw_size = MAX_FW_BUF_SIZE;
-	struct geni_se_plat *plat;
+static void *qup_fw_buf;
 
-	/* Find the first GENI SE wrapper that needs fw loading */
-	for (uclass_first_device(UCLASS_MISC, &geni_wrapper);
-	     geni_wrapper;
-	     uclass_next_device(&geni_wrapper)) {
-		if (device_get_uclass_id(geni_wrapper) == UCLASS_MISC &&
-		    !strcmp(geni_wrapper->driver->name, "geni-se-qup")) {
-			plat = dev_get_plat(geni_wrapper);
-			if (plat->need_firmware_load)
-				break;
-		}
-	}
-	if (!geni_wrapper) {
-		pr_err("GENI SE wrapper not found\n");
-		return 0;
-	}
+/*
+ * Get the firmware for the GENI SEs. It is read from the dedicated partition on storage on the
+ * first call and the same buffer is returned to all GENI SE wrappers after that.
+ */
+static int qcom_geni_get_fw(struct geni_se_plat *plat, void **fwp)
+{
+	struct udevice *blk_dev;
+	struct disk_partition part_info;
+	void *fw_buf;
+	size_t fw_size;
+	int ret;
+
+	if (qup_fw_buf)
+		goto done;
 
 	if (plat->is_mini_core) {
-		fw_buf = qup_mini_cores;
-		goto mini_core;
+		qup_fw_buf = qup_mini_cores;
+		goto done;
 	}
 
 	ret = find_qupfw_part(&blk_dev, &part_info);
 	if (ret) {
 		pr_err("QUP firmware partition not found\n");
-		return 0;
+		return -ENOENT;
 	}
 
 	if (part_info.size * part_info.blksz > MAX_FW_BUF_SIZE) {
@@ -612,10 +605,50 @@ static int qcom_geni_fw_initialise(void)
 	if (ret < 0) {
 		pr_err("Failed to read firmware from partition\n");
 		free(fw_buf);
+		return -EIO;
+	}
+
+	qup_fw_buf = fw_buf;
+done:
+	*fwp = qup_fw_buf;
+
+	return 0;
+}
+
+/*
+ * Load firmware for QCOM GENI peripherals from the dedicated partition on storage and bind/probe
+ * all the peripheral devices that need firmware to be loaded.
+ */
+static int qcom_geni_fw_initialise(void)
+{
+	debug("Loading firmware for QCOM GENI SE\n");
+	struct udevice *geni_wrapper;
+	int ret;
+	void *fw_buf;
+	struct geni_se_plat *plat;
+
+	/* Find the first GENI SE wrapper that needs fw loading */
+	for (uclass_first_device(UCLASS_MISC, &geni_wrapper);
+	     geni_wrapper;
+	     uclass_next_device(&geni_wrapper)) {
+		if (device_get_uclass_id(geni_wrapper) == UCLASS_MISC &&
+		    !strcmp(geni_wrapper->driver->name, "geni-se-qup")) {
+			plat = dev_get_plat(geni_wrapper);
+			if (plat->need_firmware_load)
+				break;
+		}
+	}
+	if (!geni_wrapper) {
+		pr_err("GENI SE wrapper not found\n");
 		return 0;
 	}
 
-mini_core:
+	ret = qcom_geni_get_fw(plat, &fw_buf);
+	if (ret == -ENOENT || ret == -EIO)
+		return 0;
+	if (ret)
+		return ret;
+
 	/*
 	 * OK! Firmware is loaded, now bind and probe remaining children. They will attempt to load
 	 * firmware during probe. Do this for each GENI SE wrapper that needs firmware loading.
