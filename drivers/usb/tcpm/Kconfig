@@ -14,3 +14,11 @@ config TYPEC_FUSB302
 	  The Fairchild FUSB302 Type-C chip driver that works with
 	  Type-C Port Controller Manager to provide USB PD and USB
 	  Type-C functionalities.
+
+config TYPEC_QCOM_PMIC
+	bool "Qualcomm PMIC Type-C port driver"
+	depends on DM_PMIC && DM_REGULATOR && TYPEC_TCPM
+	help
+	  Driver for the Type-C port block of Qualcomm PMICs such as the
+	  PMI632 and PM4125. It provides Type-C attach detection and VBUS
+	  control for the TCPM. USB Power Delivery is not supported.
