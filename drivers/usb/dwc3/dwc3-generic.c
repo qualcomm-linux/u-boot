@@ -16,6 +16,7 @@
 #include <linux/string.h>
 #include <linux/usb/gadget.h>
 #include <power/regulator.h>
+#include <usb/tcpm.h>
 #include <usb/xhci.h>
 #include "core.h"
 #include "dwc3-generic.h"
@@ -254,6 +255,25 @@ U_BOOT_DRIVER(dwc3_generic_peripheral) = {
 #endif
 
 #if CONFIG_IS_ENABLED(USB_HOST)
+/*
+ * If the controller is connected to a Type-C port, run the port until a
+ * connected device is attached, so that VBUS is on before the bus is scanned.
+ */
+static void dwc3_generic_host_start_typec(struct udevice *dev)
+{
+	struct udevice *tcpm;
+	int rc;
+
+	rc = tcpm_get_by_usb_controller(dev, &tcpm);
+	if (rc) {
+		if (rc != -ENODEV)
+			dev_warn(dev, "failed to get Type-C port: %d\n", rc);
+		return;
+	}
+
+	tcpm_poll_until_settled(tcpm);
+}
+
 static int dwc3_generic_host_probe(struct udevice *dev)
 {
 	struct xhci_hcor *hcor;
@@ -273,6 +293,8 @@ static int dwc3_generic_host_probe(struct udevice *dev)
 	rc = regulator_set_enable_if_allowed(priv->vbus_supply, true);
 	if (rc && rc != -ENOSYS)
 		return rc;
+
+	dwc3_generic_host_start_typec(dev);
 
 	hccr = (struct xhci_hccr *)priv->gen_priv.base;
 	hcor = (struct xhci_hcor *)(priv->gen_priv.base +
