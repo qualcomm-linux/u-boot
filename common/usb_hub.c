@@ -162,6 +162,25 @@ int usb_get_port_status(struct usb_device *dev, int port, void *data)
 	return ret;
 }
 
+/*
+ * Wait for a port reset to complete.
+ */
+static void usb_hub_wait_port_reset(struct usb_device *dev, int port)
+{
+	ALLOC_CACHE_ALIGN_BUFFER(struct usb_port_status, portsts, 1);
+	int i;
+
+	for (i = 0; i < HUB_LONG_RESET_TIME; i++) {
+		if (usb_get_port_status(dev, port, portsts) < 0)
+			return;
+		if (!(le16_to_cpu(portsts->wPortStatus) & USB_PORT_STAT_RESET))
+			return;
+		mdelay(1);
+	}
+
+	debug("port %d: reset did not complete\n", port);
+}
+
 static void usb_hub_power_on(struct usb_hub_device *hub)
 {
 	int i;
@@ -176,6 +195,7 @@ static void usb_hub_power_on(struct usb_hub_device *hub)
 		if (usb_hub_is_superspeed(dev)) {
 			usb_set_port_feature(dev, i + 1, USB_PORT_FEAT_RESET);
 			debug("Reset : port %d returns %lX\n", i + 1, dev->status);
+			usb_hub_wait_port_reset(dev, i + 1);
 		}
 		usb_set_port_feature(dev, i + 1, USB_PORT_FEAT_POWER);
 		debug("PowerOn : port %d returns %lX\n", i + 1, dev->status);
