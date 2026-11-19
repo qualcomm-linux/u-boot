@@ -9,6 +9,7 @@
 
 #include <dm/of.h>
 #include <linux/bitops.h>
+#include <linux/errno.h>
 #include "pd.h"
 
 enum typec_orientation {
@@ -87,6 +88,45 @@ extern const char * const typec_data_role_name[];
 extern const char * const typec_cc_status_name[];
 
 int tcpm_get(int index, struct udevice **devp);
+
+#if CONFIG_IS_ENABLED(TYPEC_TCPM)
+/**
+ * tcpm_get_by_usb_controller() - get the Type-C port of a USB controller
+ * @usb_dev: USB controller device
+ * @devp: returns the Type-C port controller device, probed
+ *
+ * Follows the OF graph from the controller to its usb-c-connector node. The
+ * port controller is the parent of the connector node.
+ *
+ * Return: 0 if OK, -ENODEV if the controller is not linked to a connector,
+ * other -ve on error
+ */
+int tcpm_get_by_usb_controller(struct udevice *usb_dev, struct udevice **devp);
+
+/**
+ * tcpm_poll_until_settled() - run the port state machine until it settles
+ * @dev: Type-C port controller device
+ *
+ * Polls the port controller until the port is unattached or ready. A partner
+ * connected when this is called is attached, for example VBUS is turned on
+ * for a sink partner.
+ *
+ * Return: 0 if OK, -ETIMEDOUT if the port did not settle
+ */
+int tcpm_poll_until_settled(struct udevice *dev);
+#else
+static inline int tcpm_get_by_usb_controller(struct udevice *usb_dev,
+					     struct udevice **devp)
+{
+	return -ENODEV;
+}
+
+static inline int tcpm_poll_until_settled(struct udevice *dev)
+{
+	return -ENOSYS;
+}
+#endif
+
 int tcpm_get_pd_rev(struct udevice *dev);
 int tcpm_get_current(struct udevice *dev);
 int tcpm_get_voltage(struct udevice *dev);
