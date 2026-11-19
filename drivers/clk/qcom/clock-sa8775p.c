@@ -17,6 +17,8 @@
 
 #define USB30_PRIM_MOCK_UTMI_CLK_CMD_RCGR	0x1b040
 #define USB30_PRIM_MASTER_CLK_CMD_RCGR		0x1b028
+#define USB20_MOCK_UTMI_CLK_CMD_RCGR		0x1c040
+#define USB20_MASTER_CLK_CMD_RCGR		0x1c028
 #define USB3_PRIM_PHY_AUX_CMD_RCGR		0x1b06c
 
 #define UFS_PHY_AXI_CLK_CMD_RCGR		0x8302c
@@ -143,6 +145,15 @@ static ulong sa8775p_set_rate(struct clk *clk, ulong rate)
 				     5, 0, 0, CFG_CLK_SRC_GPLL0, 8);
 		clk_rcg_set_rate(priv->base, USB3_PRIM_PHY_AUX_CMD_RCGR, 0, 0);
 		return rate;
+	case GCC_USB20_MOCK_UTMI_CLK:
+		WARN(rate != 19200000, "Unexpected rate for USB20_MOCK_UTMI_CLK: %lu\n", rate);
+		clk_rcg_set_rate(priv->base, USB20_MOCK_UTMI_CLK_CMD_RCGR, 0, CFG_CLK_SRC_CXO);
+		return rate;
+	case GCC_USB20_MASTER_CLK:
+		WARN(rate != 120000000, "Unexpected rate for USB20_MASTER_CLK: %lu\n", rate);
+		clk_rcg_set_rate_mnd(priv->base, USB20_MASTER_CLK_CMD_RCGR,
+				     9, 0, 0, CFG_CLK_SRC_GPLL0, 8);
+		return 120000000;
 
 	case GCC_UFS_PHY_AXI_CLK:
 		freq = qcom_find_freq(ftbl_gcc_ufs_phy_axi_clk_src, rate);
@@ -187,6 +198,11 @@ static const struct gate_clk sa8775p_clks[] = {
 	GATE_CLK_POLLED(GCC_AGGRE_USB3_PRIM_AXI_CLK, 0x1b084, BIT(0), 0x1b084),
 	GATE_CLK_POLLED(GCC_USB30_PRIM_SLEEP_CLK, 0x1b020, BIT(0), 0x1b020),
 	GATE_CLK_POLLED(GCC_USB30_PRIM_MOCK_UTMI_CLK, 0x1b024, BIT(0), 0x1b024),
+	GATE_CLK_POLLED(GCC_CFG_NOC_USB2_PRIM_AXI_CLK, 0x1c060, BIT(0), 0x1c060),
+	GATE_CLK_POLLED(GCC_USB20_MASTER_CLK, 0x1c018, BIT(0), 0x1c018),
+	GATE_CLK_POLLED(GCC_AGGRE_USB2_PRIM_AXI_CLK, 0x1c05c, BIT(0), 0x1c05c),
+	GATE_CLK_POLLED(GCC_USB20_SLEEP_CLK, 0x1c020, BIT(0), 0x1c020),
+	GATE_CLK_POLLED(GCC_USB20_MOCK_UTMI_CLK, 0x1c024, BIT(0), 0x1c024),
 	GATE_CLK_POLLED(GCC_USB3_PRIM_PHY_AUX_CLK, 0x1b05c, BIT(0), 0x1b05c),
 	GATE_CLK_POLLED(GCC_USB3_PRIM_PHY_COM_AUX_CLK, 0x1b060, BIT(0), 0x1b060),
 	GATE_CLK(GCC_USB3_PRIM_PHY_PIPE_CLK, 0x1b064, BIT(0)),
@@ -320,6 +336,7 @@ static const struct qcom_reset_map sa8775p_gcc_resets[] = {
 
 static const struct qcom_power_map sa8775p_gdscs[] = {
 	[UFS_PHY_GDSC] = { .reg = 0x83004, .flags = RETAIN_FF_ENABLE | POLL_CFG_GDSCR },
+	[USB20_PRIM_GDSC] = { .reg = 0x1c004, .flags = RETAIN_FF_ENABLE | POLL_CFG_GDSCR },
 	[USB30_PRIM_GDSC] = { .reg = 0x1B004, .flags = RETAIN_FF_ENABLE | POLL_CFG_GDSCR },
 };
 
