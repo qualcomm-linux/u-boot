@@ -141,6 +141,9 @@ static enum typec_cc_status tcpm_rp_cc(struct tcpm_port *port)
 	int nr_pdo = port->nr_src_pdo;
 	int i;
 
+	if (!port->pd_supported)
+		return port->src_rp;
+
 	/*
 	 * Search for first entry with matching voltage.
 	 * It should report the maximum supported current.
@@ -1290,9 +1293,11 @@ static int tcpm_src_attach(struct udevice *dev)
 	if (ret < 0)
 		return ret;
 
-	ret = drvops->set_pd_rx(dev, true);
-	if (ret < 0)
-		goto out_disable_mux;
+	if (port->pd_supported) {
+		ret = drvops->set_pd_rx(dev, true);
+		if (ret < 0)
+			goto out_disable_mux;
+	}
 
 	/*
 	 * USB Type-C specification, version 1.2,
@@ -1321,7 +1326,8 @@ static int tcpm_src_attach(struct udevice *dev)
 out_disable_vconn:
 	tcpm_set_vconn(dev, false);
 out_disable_pd:
-	drvops->set_pd_rx(dev, false);
+	if (port->pd_supported)
+		drvops->set_pd_rx(dev, false);
 out_disable_mux:
 	dev_err(dev, "TCPM: CC connected in %s as DFP\n",
 		polarity ? "CC2" : "CC1");
@@ -1476,6 +1482,10 @@ static void run_state_machine(struct udevice *dev)
 		tcpm_set_state(dev, SRC_READY, 0);
 		break;
 	case SRC_STARTUP:
+		if (!port->pd_supported) {
+			tcpm_set_state(dev, SRC_READY, 0);
+			break;
+		}
 		port->caps_count = 0;
 		port->negotiated_rev = PD_MAX_REV;
 		port->message_id = 0;
@@ -1612,7 +1622,10 @@ static void run_state_machine(struct udevice *dev)
 					       tcpm_get_current_limit(port),
 					       5000);
 			tcpm_set_charge(dev, true);
-			tcpm_set_state(dev, SNK_WAIT_CAPABILITIES, 0);
+			if (!port->pd_supported)
+				tcpm_set_state(dev, SNK_READY, 0);
+			else
+				tcpm_set_state(dev, SNK_WAIT_CAPABILITIES, 0);
 			break;
 		}
 		/*
@@ -1707,7 +1720,8 @@ static void run_state_machine(struct udevice *dev)
 	case SRC_HARD_RESET_VBUS_ON:
 		tcpm_set_vconn(dev, true);
 		tcpm_set_vbus(dev, true);
-		drvops->set_pd_rx(dev, true);
+		if (port->pd_supported)
+			drvops->set_pd_rx(dev, true);
 		tcpm_set_attached_state(dev, true);
 		tcpm_set_state(dev, SRC_UNATTACHED, PD_T_PS_SOURCE_ON);
 		break;
@@ -2153,39 +2167,61 @@ static int tcpm_fw_get_caps(struct udevice *dev)
 		return -EINVAL;
 
 	port->port_type = port->typec_type;
+	port->pd_supported = !ofnode_read_bool(node, "pd-disable");
+
+	/* Get the preferred power role for DRP */
+	port->typec_prefer_role = TYPEC_NO_PREFERRED_ROLE;
+	if (port->port_type == TYPEC_PORT_DRP) {
+		cap_str = ofnode_read_string(node, "try-power-role");
+		if (cap_str) {
+			if (!strcmp("sink", cap_str))
+				port->typec_prefer_role = TYPEC_SINK;
+			else if (!strcmp("source", cap_str))
+				port->typec_prefer_role = TYPEC_SOURCE;
+			else
+				return -EINVAL;
+		}
+	}
 
 	if (port->port_type == TYPEC_PORT_SNK)
 		goto sink;
 
-	/* Get source pdos */
-	ret = ofnode_read_size(node, "source-pdos") / sizeof(u32);
-	if (ret <= 0)
-		return -EINVAL;
+	/* Get Source PDOs for the PD port or Source Rp value for the non-PD port */
+	if (port->pd_supported) {
+		ret = ofnode_read_size(node, "source-pdos") / sizeof(u32);
+		if (ret <= 0)
+			return -EINVAL;
 
-	port->nr_src_pdo = min(ret, PDO_MAX_OBJECTS);
-	ret = ofnode_read_u32_array(node, "source-pdos",
-				    port->src_pdo, port->nr_src_pdo);
-	if (ret || tcpm_validate_caps(dev, port->src_pdo, port->nr_src_pdo))
-		return -EINVAL;
+		port->nr_src_pdo = min(ret, PDO_MAX_OBJECTS);
+		ret = ofnode_read_u32_array(node, "source-pdos",
+					    port->src_pdo, port->nr_src_pdo);
+		if (ret || tcpm_validate_caps(dev, port->src_pdo,
+					      port->nr_src_pdo))
+			return -EINVAL;
+	} else {
+		cap_str = ofnode_read_string(node, "typec-power-opmode");
+		if (!cap_str)
+			return -EINVAL;
+
+		if (!strcmp("default", cap_str))
+			port->src_rp = TYPEC_CC_RP_DEF;
+		else if (!strcmp("1.5A", cap_str))
+			port->src_rp = TYPEC_CC_RP_1_5;
+		else if (!strcmp("3.0A", cap_str) ||
+			 !strcmp("usb_power_delivery", cap_str))
+			port->src_rp = TYPEC_CC_RP_3_0;
+		else
+			return -EINVAL;
+	}
 
 	if (port->port_type == TYPEC_PORT_SRC)
 		return 0;
-
-	/* Get the preferred power role for DRP */
-	cap_str = ofnode_read_string(node, "try-power-role");
-	if (!cap_str)
-		return -EINVAL;
-
-	if (!strcmp("sink", cap_str))
-		port->typec_prefer_role = TYPEC_SINK;
-	else if (!strcmp("source", cap_str))
-		port->typec_prefer_role = TYPEC_SOURCE;
-	else
-		return -EINVAL;
-
-	if (port->typec_prefer_role < 0)
-		return -EINVAL;
 sink:
+	port->self_powered = ofnode_read_bool(node, "self-powered");
+
+	if (!port->pd_supported)
+		return 0;
+
 	/* Get sink pdos */
 	ret = ofnode_read_size(node, "sink-pdos") / sizeof(u32);
 	if (ret <= 0)
@@ -2200,8 +2236,6 @@ sink:
 	if (ofnode_read_u32_array(node, "op-sink-microwatt", &mw, 1))
 		return -EINVAL;
 	port->operating_snk_mw = mw / 1000;
-
-	port->self_powered = ofnode_read_bool(node, "self-powered");
 
 	return 0;
 }
@@ -2221,6 +2255,7 @@ static int tcpm_port_init(struct udevice *dev)
 	port->port_type = port->typec_type;
 
 	tcpm_init(dev);
+	port->init_time = get_timer(0);
 
 	dev_info(dev, "TCPM: init finished\n");
 
@@ -2283,4 +2318,44 @@ int tcpm_post_probe(struct udevice *dev)
 	tcpm_poll_event(dev);
 
 	return 0;
+}
+
+static bool tcpm_port_is_settled(struct tcpm_port *port)
+{
+	switch (port->state) {
+	case TOGGLING:
+	case SRC_UNATTACHED:
+	case SNK_UNATTACHED:
+	case SRC_READY:
+	case SNK_READY:
+		return true;
+	default:
+		return false;
+	}
+}
+
+int tcpm_poll_until_settled(struct udevice *dev)
+{
+	const struct dm_tcpm_ops *drvops = dev_get_driver_ops(dev);
+	struct tcpm_port *port = dev_get_uclass_plat(dev);
+	unsigned long start = get_timer(0);
+
+	for (;;) {
+		drvops->poll_event(dev);
+		tcpm_check_and_run_delayed_work(dev);
+
+		if (tcpm_port_is_settled(port) &&
+		    get_timer(port->init_time) >= TCPM_ATTACH_DETECT_TIME_MS)
+			return 0;
+
+		if (get_timer(start) >= TCPM_SETTLE_TIME_OUT_MS)
+			break;
+
+		udelay(500);
+	}
+
+	dev_warn(dev, "TCPM: port did not settle, state %s\n",
+		 tcpm_states[port->state]);
+
+	return -ETIMEDOUT;
 }

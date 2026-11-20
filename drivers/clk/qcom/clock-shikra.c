@@ -16,6 +16,8 @@
 #define GCC_QUPV3_WRAP0_S0_CLK_CMD_RCGR	0x1f148
 #define GCC_SDCC1_APPS_CLK_CMD_RCGR		0x38028
 #define GCC_SDCC2_APPS_CLK_CMD_RCGR		0x1e00c
+#define GCC_USB20_MASTER_CLK_CMD_RCGR		0xb003c
+#define GCC_USB20_MOCK_UTMI_CLK_CMD_RCGR	0xb0020
 #define GCC_USB30_PRIM_MASTER_CLK_CMD_RCGR	0x1a01c
 #define GCC_USB30_PRIM_MOCK_UTMI_CLK_CMD_RCGR	0x1a034
 #define GCC_USB3_PRIM_PHY_AUX_CLK_CMD_RCGR	0x1a060
@@ -100,6 +102,12 @@ static const struct freq_tbl ftbl_gcc_sdcc2_apps_clk_src[] = {
 	{ }
 };
 
+static const struct freq_tbl ftbl_gcc_usb20_master_clk_src[] = {
+	F(60000000, CFG_CLK_SRC_GPLL0_AUX2, 5, 0, 0),
+	F(120000000, CFG_CLK_SRC_GPLL0, 5, 0, 0),
+	{ }
+};
+
 static const struct freq_tbl ftbl_gcc_usb30_prim_master_clk_src[] = {
 	F(66666667, CFG_CLK_SRC_GPLL0_AUX2, 4.5, 0, 0),
 	F(133333333, CFG_CLK_SRC_GPLL0, 4.5, 0, 0),
@@ -157,6 +165,17 @@ static ulong shikra_set_rate(struct clk *clk, ulong rate)
 		clk_rcg_set_rate_mnd(priv->base, GCC_SDCC2_APPS_CLK_CMD_RCGR,
 				     freq->pre_div, freq->m, freq->n, freq->src, 8);
 		return freq->freq;
+	case GCC_USB20_MASTER_CLK:
+		freq = qcom_find_freq(ftbl_gcc_usb20_master_clk_src, rate);
+		clk_rcg_set_rate_mnd(priv->base, GCC_USB20_MASTER_CLK_CMD_RCGR,
+				     freq->pre_div, freq->m, freq->n, freq->src, 8);
+		return freq->freq;
+	case GCC_USB20_MOCK_UTMI_CLK:
+		WARN(rate != 19200000,
+		     "Unexpected rate for USB20_MOCK_UTMI_CLK: %lu\n", rate);
+		clk_rcg_set_rate(priv->base, GCC_USB20_MOCK_UTMI_CLK_CMD_RCGR,
+				 0, CFG_CLK_SRC_CXO);
+		return rate;
 	case GCC_USB30_PRIM_MASTER_CLK:
 		freq = qcom_find_freq(ftbl_gcc_usb30_prim_master_clk_src, rate);
 		clk_rcg_set_rate_mnd(priv->base, GCC_USB30_PRIM_MASTER_CLK_CMD_RCGR,

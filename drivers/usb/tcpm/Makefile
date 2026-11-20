@@ -2,3 +2,4 @@
 
 obj-$(CONFIG_TYPEC_TCPM) += tcpm.o tcpm-uclass.o
 obj-$(CONFIG_TYPEC_FUSB302) += fusb302.o
+obj-$(CONFIG_TYPEC_QCOM_PMIC) += qcom_pmic_typec.o

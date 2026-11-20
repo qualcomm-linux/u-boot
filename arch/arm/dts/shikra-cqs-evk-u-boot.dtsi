@@ -67,3 +67,166 @@
 &rpmpd {
 	bootph-all;
 };
+
+/*
+ * USB-0 (usb_1) Type-C port on the PM4125, as in Linux commit 7086cc13810b.
+ * dr_mode is "otg" in the shipping DT; "host" here for testing. In host
+ * mode dwc3-generic runs the TCPM before the bus scan, which turns VBUS on
+ * through pm4125_vbus when a device is attached.
+ */
+&pm4125_typec {
+	status = "okay";
+
+	connector {
+		compatible = "usb-c-connector";
+
+		power-role = "dual";
+		data-role = "dual";
+		self-powered;
+
+		vbus-supply = <&pm4125_vbus>;
+
+		typec-power-opmode = "default";
+		pd-disable;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+
+				pm4125_hs_in: endpoint {
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+
+				pm4125_ss_in: endpoint {
+				};
+			};
+		};
+	};
+};
+
+&pm4125_vbus {
+	regulator-min-microvolt = <5000000>;
+	regulator-max-microvolt = <5000000>;
+
+	status = "okay";
+};
+
+&pm4125_hs_in {
+	remote-endpoint = <&usb_1_dwc3_hs>;
+};
+
+&pm4125_ss_in {
+	remote-endpoint = <&usb_qmpphy_out>;
+};
+
+&usb_1_hsphy {
+	status = "okay";
+};
+
+&usb_qmpphy {
+	status = "okay";
+};
+
+&usb_1 {
+	dr_mode = "host";
+
+	status = "okay";
+};
+
+&usb_1_dwc3_hs {
+	remote-endpoint = <&pm4125_hs_in>;
+};
+
+&usb_qmpphy_out {
+	remote-endpoint = <&pm4125_ss_in>;
+};
+
+/*
+ * USB-1 (usb_2): not yet in the shared Shikra U-Boot DT. The Type-C port is
+ * managed by the CCG (CYPD6129), which has no usable firmware here, so run it
+ * as a host directly. Requires DIP switch S1016-S8 ON (routes to on-board hub).
+ */
+&qfprom {
+	qusb2_hstx_trim_2: hstx-trim@25a {
+		reg = <0x25a 0x1>;
+		bits = <4 4>;
+	};
+};
+
+&soc {
+	usb_2_hsphy: phy@1617000 {
+		compatible = "qcom,shikra-qusb2-phy";
+		reg = <0x0 0x01617000 0x0 0x180>;
+
+		clocks = <&gcc GCC_AHB2PHY_USB_CLK>,
+			 <&rpmcc RPM_SMD_XO_CLK_SRC>;
+		clock-names = "cfg_ahb", "ref";
+
+		resets = <&gcc GCC_QUSB2PHY_SEC_BCR>;
+		nvmem-cells = <&qusb2_hstx_trim_2>;
+		#phy-cells = <0>;
+
+		status = "okay";
+	};
+
+	usb_2: usb@4c00000 {
+		compatible = "qcom,shikra-dwc3", "qcom,snps-dwc3";
+		reg = <0x0 0x04c00000 0x0 0xfc100>;
+
+		clocks = <&gcc GCC_CFG_NOC_USB2_PRIM_AXI_CLK>,
+			 <&gcc GCC_USB20_MASTER_CLK>,
+			 <&gcc GCC_SYS_NOC_USB2_PRIM_AXI_CLK>,
+			 <&gcc GCC_USB20_SLEEP_CLK>,
+			 <&gcc GCC_USB20_MOCK_UTMI_CLK>;
+		clock-names = "cfg_noc",
+			      "core",
+			      "iface",
+			      "sleep",
+			      "mock_utmi";
+
+		assigned-clocks = <&gcc GCC_USB20_MOCK_UTMI_CLK>,
+				  <&gcc GCC_USB20_MASTER_CLK>;
+		assigned-clock-rates = <19200000>, <120000000>;
+
+		interrupts-extended = <&intc GIC_SPI 507 IRQ_TYPE_LEVEL_HIGH 0>,
+				      <&intc GIC_SPI 509 IRQ_TYPE_LEVEL_HIGH 0>,
+				      <&intc GIC_SPI 508 IRQ_TYPE_LEVEL_HIGH 0>;
+		interrupt-names = "dwc_usb3",
+				  "pwr_event",
+				  "hs_phy_irq";
+
+		iommus = <&apps_smmu 0x140 0x0>;
+
+		maximum-speed = "high-speed";
+
+		phys = <&usb_2_hsphy>;
+		phy-names = "usb2-phy";
+
+		power-domains = <&gcc GCC_USB20_GDSC>;
+
+		qcom,select-utmi-as-pipe-clk;
+		resets = <&gcc GCC_USB20_BCR>;
+
+		snps,dis_u2_susphy_quirk;
+		snps,dis_enblslpm_quirk;
+		snps,has-lpm-erratum;
+		snps,hird-threshold = /bits/ 8 <0x10>;
+
+		dr_mode = "host";
+		usb-role-switch;
+		wakeup-source;
+
+		status = "okay";
+
+		port {
+			usb_2_dwc3_hs: endpoint {
+			};
+		};
+	};
+};
