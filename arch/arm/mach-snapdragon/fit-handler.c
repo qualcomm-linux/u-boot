@@ -11,7 +11,7 @@
 #include <mach/qclib.h>
 #include <mach/spl.h>
 
-#define TOC_FDT				"toc_fdt"
+#define TOS_FDT				"tos_fdt"
 
 /**
  * qcom_spl_get_fit_img_entry_point() - Get entry point from FIT image node.
@@ -148,20 +148,20 @@ __weak void qcom_spl_board_fixup_bl31_params_v2(struct bl_params *bl_params)
 }
 
 /**
- * qcom_spl_get_toc_fdt_address() - Get the optional TOC FDT load address.
+ * qcom_spl_get_tos_fdt_address() - Get the optional TOS FDT load address.
  *
  * The generic FIT loader has already loaded the node by the time ATF
  * parameters are prepared. Look up its load address so it can be passed to
  * BL32 through arg0.
  *
- * Return: TOC FDT load address, or 0 if the optional node is unavailable.
+ * Return: TOS FDT load address, or 0 if the optional node is unavailable.
  */
-u64 qcom_spl_get_toc_fdt_address(void)
+u64 qcom_spl_get_tos_fdt_address(void)
 {
-	u64 toc_fdt_address = 0;
+	u64 tos_fdt_address = 0;
 	const void *fit = (const void *)CONFIG_SPL_LOAD_FIT_ADDRESS;
 	int images_node;
-	int toc_fdt_node;
+	int tos_fdt_node;
 	int ret;
 
 	images_node = fdt_subnode_offset(fit, 0, "images");
@@ -170,19 +170,19 @@ u64 qcom_spl_get_toc_fdt_address(void)
 		return 0;
 	}
 
-	toc_fdt_node = fdt_subnode_offset(fit, images_node, TOC_FDT);
-	if (toc_fdt_node < 0) {
-		pr_debug("No '%s' node in FIT, BL32 will get arg0=0\n", TOC_FDT);
+	tos_fdt_node = fdt_subnode_offset(fit, images_node, TOS_FDT);
+	if (tos_fdt_node < 0) {
+		pr_debug("No '%s' node in FIT, BL32 will get arg0=0\n", TOS_FDT);
 		return 0;
 	}
 
-	ret = qcom_spl_get_fit_img_entry_point((void *)fit, toc_fdt_node,
-					       &toc_fdt_address);
+	ret = qcom_spl_get_fit_img_entry_point((void *)fit, tos_fdt_node,
+					       &tos_fdt_address);
 	if (ret)
-		pr_warn("Failed to get '%s' load address (%d)\n", TOC_FDT, ret);
+		pr_warn("Failed to get '%s' load address (%d)\n", TOS_FDT, ret);
 	else
-		printf("TOC FDT address: 0x%lx\n",
-		       (unsigned long)toc_fdt_address);
+		printf("TOS FDT address: 0x%lx\n",
+		       (unsigned long)tos_fdt_address);
 
-	return toc_fdt_address;
+	return tos_fdt_address;
 }
