@@ -128,3 +128,36 @@
 &vreg_l8a {
 	regulator-always-on;
 };
+
+/*
+ * Run usb_2 (micro-USB-B) as a USB host so a pendrive can be used to boot.
+ * U-Boot has no USB role-switch support, so the dwc3 glue only binds the
+ * host driver when dr_mode is explicitly "host". The host driver only looks
+ * for vbus-supply on the controller node, and the connector's own vbus-gpios
+ * sit behind an expander U-Boot can't drive, so point it at the PMIC-GPIO
+ * backed regulator.
+ */
+&usb_2 {
+	dr_mode = "host";
+	vbus-supply = <&usb2_vbus>;
+};
+
+/*
+ * usb_1 (USB0 Type-C) stays in peripheral mode. No VBUS regulator is described
+ * for this port, so add one: USB0 VBUS is enabled by pin 2 of the TCA9538
+ * expander at 0x39 on i2c15 (IOEXP1_P2).
+ */
+/ {
+	usb0_vbus: regulator-usb0-vbus {
+		compatible = "regulator-fixed";
+		regulator-name = "usb0_vbus";
+		gpio = <&expander1 2 GPIO_ACTIVE_HIGH>;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		enable-active-high;
+	};
+};
+
+&usb_1 {
+	vbus-supply = <&usb0_vbus>;
+};
