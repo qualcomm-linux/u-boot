@@ -98,7 +98,7 @@
 };
 
 &usb_2 {
-	dr_mode = "otg";
+	dr_mode = "host";
 };
 
 /* Enter Qualcomm EDL/download mode via "reset -edl". */

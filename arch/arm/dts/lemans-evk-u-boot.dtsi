@@ -100,3 +100,23 @@
 		spi-rx-bus-width = <1>;
 	};
 };
+
+/*
+ * usb_0 (USB0 Type-C) is left in its default mode; only describe its VBUS
+ * regulator (GPIO 2 on the TCA9538 expander on i2c18), since the host driver
+ * only looks for vbus-supply on the controller node.
+ */
+&usb_0 {
+	vbus-supply = <&usb0_vbus>;
+};
+
+/*
+ * Run usb_2 (micro-USB) as a USB host so a pendrive can be used to boot. U-Boot
+ * has no USB role-switch support, so the dwc3 glue only binds the host driver
+ * when dr_mode is explicitly "host". The host driver only looks for vbus-supply
+ * on the controller node, so point it at the board's USB2 VBUS regulator.
+ */
+&usb_2 {
+	dr_mode = "host";
+	vbus-supply = <&usb2_vbus>;
+};
