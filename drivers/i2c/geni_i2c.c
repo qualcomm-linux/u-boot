@@ -24,6 +24,8 @@
 #include <soc/qcom/geni-se.h>
 #include <soc/qcom/qup-fw-load.h>
 
+#include "geni_i2c_gpi.h"
+
 #define SE_I2C_TX_TRANS_LEN		0x26c
 #define SE_I2C_RX_TRANS_LEN		0x270
 #define SE_I2C_SCL_COUNTERS		0x278
@@ -82,6 +84,7 @@ struct geni_i2c_priv {
 	u32 tx_wm;
 	bool is_master_hub;
 	const struct geni_i2c_clk_fld *clk_fld;
+	struct geni_gpi *gpi;
 };
 
 /*
@@ -266,6 +269,17 @@ static int geni_i2c_xfer(struct udevice *bus, struct i2c_msg msgs[], int num)
 {
 	struct geni_i2c_priv *geni = dev_get_priv(bus);
 	int i, ret = 0;
+
+	if (geni->gpi) {
+		struct geni_gpi_timing t = {
+			.clk_div = geni->clk_fld->clk_div,
+			.t_high_cnt = geni->clk_fld->t_high_cnt,
+			.t_low_cnt = geni->clk_fld->t_low_cnt,
+			.t_cycle_cnt = geni->clk_fld->t_cycle_cnt,
+		};
+
+		return geni_gpi_xfer(geni->gpi, msgs, num, &t);
+	}
 
 	qcom_geni_i2c_conf(geni);
 
@@ -516,10 +530,22 @@ static int geni_i2c_probe(struct udevice *dev)
 	}
 
 	fifo_disable = readl(geni->base + GENI_IF_DISABLE_RO) & FIFO_IF_DISABLE;
+
 	if (fifo_disable) {
-		geni_i2c_disable_clocks(dev, geni);
-		dev_err(dev, "FIFO mode disabled, DMA mode unsupported\n");
-		return -ENXIO;
+		if (!IS_ENABLED(CONFIG_SYS_I2C_GENI_GPI)) {
+			geni_i2c_disable_clocks(dev, geni);
+			dev_err(dev, "FIFO mode disabled, DMA mode unsupported\n");
+			return -ENXIO;
+		}
+
+		/* The SE was handed over in GSI mode, talk to it through the GPI */
+		ret = geni_gpi_init(dev, geni->base, &geni->gpi);
+		if (ret) {
+			geni_i2c_disable_clocks(dev, geni);
+			return ret;
+		}
+
+		return geni_i2c_clk_map_idx(geni, I2C_SPEED_STANDARD_RATE);
 	}
 
 	if (!geni->is_master_hub) {
@@ -549,6 +575,17 @@ static int geni_i2c_set_bus_speed(struct udevice *dev, unsigned int clk_freq)
 	return geni_i2c_clk_map_idx(geni, clk_freq);
 }
 
+static int geni_i2c_remove(struct udevice *dev)
+{
+	struct geni_i2c_priv *geni = dev_get_priv(dev);
+
+	/* Release the GPII so the OS can allocate it again */
+	if (geni->gpi)
+		geni_gpi_remove(geni->gpi);
+
+	return 0;
+}
+
 static const struct dm_i2c_ops geni_i2c_ops = {
 	.xfer		= geni_i2c_xfer,
 	.set_bus_speed	= geni_i2c_set_bus_speed,
@@ -565,8 +602,10 @@ U_BOOT_DRIVER(i2c_geni) = {
 	.id	= UCLASS_I2C,
 	.of_match = geni_i2c_ids,
 	.probe	= geni_i2c_probe,
+	.remove	= geni_i2c_remove,
 	.priv_auto = sizeof(struct geni_i2c_priv),
 	.ops	= &geni_i2c_ops,
+	.flags	= DM_FLAG_OS_PREPARE,
 };
 
 static const struct udevice_id geni_i2c_master_hub_ids[] = {
