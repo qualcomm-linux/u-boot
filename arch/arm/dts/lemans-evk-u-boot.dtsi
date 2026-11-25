@@ -15,6 +15,19 @@
 		tcsr-hw-version-offset = <0x8000>;
 	};
 
+	/* Volume Down is on TLMM GPIO 35, not on the PMIC RESIN input. */
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		key-volume-down {
+			label = "Volume Down";
+			gpios = <&tlmm 35 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_VOLUMEDOWN>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&vol_dn_default>;
+		};
+	};
+
 	clocks {
 		/* Fixed clocks needed by GCC */
 		xo_board_clk {
@@ -63,6 +76,18 @@
 		drive-strength = <2>;
 		bias-disable;
 	};
+
+	vol_dn_default: vol-dn-state {
+		pins = "gpio35";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-pull-up;
+	};
+};
+
+/* pmm8654au has no RESIN input (PAR1 HAS_KPD_RESIN=0): never reports a press. */
+&pmm8654au_0_pon_resin {
+	status = "disabled";
 };
 
 /* Enter Qualcomm EDL/download mode via "reset -edl". */
