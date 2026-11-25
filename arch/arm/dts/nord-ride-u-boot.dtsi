@@ -5,6 +5,7 @@
 
 #include <dt-bindings/clock/qcom,nord-negcc.h>
 #include <dt-bindings/clock/qcom,nord-tcsrcc.h>
+#include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/linux-event-codes.h>
 #include <dt-bindings/spmi/spmi.h>
 
@@ -22,6 +23,22 @@
 		nvmem-cells = <&reboot_reason>;
 		nvmem-cell-names = "reboot-mode";
 		mode-bootloader = <0x02>;
+	};
+
+	/*
+	 * Volume Down is on TLMM GPIO 136, not on the PMIC RESIN input, and is
+	 * active high here.
+	 */
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		key-volume-down {
+			label = "Volume Down";
+			gpios = <&tlmm 136 GPIO_ACTIVE_HIGH>;
+			linux,code = <KEY_VOLUMEDOWN>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&vol_dn_default>;
+		};
 	};
 
 	negcc: clock-controller@8900000 {
@@ -176,6 +193,13 @@
 
 &tlmm {
 	bootph-all;
+
+	vol_dn_default: vol-dn-state {
+		pins = "gpio136";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-pull-down;
+	};
 };
 
 &soc {
