@@ -30,6 +30,8 @@ DECLARE_GLOBAL_DATA_PTR;
  * so use Shikra's fixed map when enabling the MMU.
  */
 #define SHIKRA_SPL_DEVICE_REG_LOW_BASE	0x00100000UL
+#define SHIKRA_SPL_RPM_BASE				0x04600000UL
+#define SHIKRA_SPL_RPM_SIZE				0x00030000UL
 #define SHIKRA_SPL_SYSTEM_IMEM_BASE		0x0c100000UL
 #define SHIKRA_SPL_SYSTEM_IMEM_SIZE		0x00020000UL
 #define SHIKRA_SPL_BOOTIMEM_BASE		0x0c200000UL
@@ -40,16 +42,32 @@ DECLARE_GLOBAL_DATA_PTR;
 #define SHIKRA_SPL_DDR_SIZE			0x80000000UL
 #define SHIKRA_SPL_DDR2_BASE			0x880000000ULL
 #define SHIKRA_SPL_DDR2_SIZE			(SZ_32G - SZ_2G)
-#define SHIKRA_SPL_DEVICE_REG_LOW_SIZE		(SHIKRA_SPL_SYSTEM_IMEM_BASE - \
+#define SHIKRA_SPL_DEVICE_REG_LOW_SIZE		(SHIKRA_SPL_RPM_BASE - \
 						 SHIKRA_SPL_DEVICE_REG_LOW_BASE)
 #define SHIKRA_SPL_DEVICE_REG_HIGH_SIZE	(SHIKRA_SPL_DDR_BASE - \
 						 SHIKRA_SPL_DEVICE_REG_HIGH_BASE)
+#define SHIKRA_SPL_DEVICE_REG_MID_BASE		(SHIKRA_SPL_RPM_BASE + \
+						 SHIKRA_SPL_RPM_SIZE)
+#define SHIKRA_SPL_DEVICE_REG_MID_SIZE		(SHIKRA_SPL_SYSTEM_IMEM_BASE - \
+						 SHIKRA_SPL_DEVICE_REG_MID_BASE)
 
 static struct mm_region shikra_spl_mem_map[] = {
 	{
 		.virt = SHIKRA_SPL_DEVICE_REG_LOW_BASE,
 		.phys = SHIKRA_SPL_DEVICE_REG_LOW_BASE,
 		.size = SHIKRA_SPL_DEVICE_REG_LOW_SIZE,
+		.attrs = PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+			 PTE_BLOCK_NON_SHARE,
+}, {
+		.virt = SHIKRA_SPL_RPM_BASE,
+		.phys = SHIKRA_SPL_RPM_BASE,
+		.size = SHIKRA_SPL_RPM_SIZE,
+		.attrs = PTE_BLOCK_MEMTYPE(MT_NORMAL) |
+			 PTE_BLOCK_INNER_SHARE,
+	}, {
+		.virt = SHIKRA_SPL_DEVICE_REG_MID_BASE,
+		.phys = SHIKRA_SPL_DEVICE_REG_MID_BASE,
+		.size = SHIKRA_SPL_DEVICE_REG_MID_SIZE,
 		.attrs = PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
 			 PTE_BLOCK_NON_SHARE,
 	}, {
@@ -93,11 +111,16 @@ struct mm_region *qcom_spl_mem_map(void)
 	return shikra_spl_mem_map;
 }
 
+u64 get_page_table_size(void)
+{
+	return SZ_64K;
+}
+
 int arm_reserve_mmu(void)
 {
 #if !(CONFIG_IS_ENABLED(SYS_ICACHE_OFF) && CONFIG_IS_ENABLED(SYS_DCACHE_OFF))
 	mem_map = qcom_spl_mem_map();
-	gd->arch.tlb_size = PGTABLE_SIZE;
+	gd->arch.tlb_size = get_page_table_size();
 	gd->arch.tlb_addr = (unsigned long)memalign(SZ_64K, gd->arch.tlb_size);
 	if (!gd->arch.tlb_addr)
 		return -ENOMEM;
