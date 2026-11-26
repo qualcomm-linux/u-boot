@@ -187,24 +187,55 @@ static struct mmu_dev *alloc_dev(struct udevice *dev)
 	return mmu_dev;
 }
 
+/**
+ * find_used_cbs() - Mark the context banks the boot firmware translates through
+ * @priv: SMMU private data
+ * @used: array of at least @priv->num_cb bytes, zeroed by the caller
+ *
+ * A context bank only ever sees the transactions that a valid stream mapping
+ * entry of type TRANS directs to it, so the stream mapping table is a complete
+ * record of the banks in use. The CBARs are not: their reset values are not
+ * architecturally specified, and firmware that claims no bank of its own
+ * leaves every one of them at the same value, which no test can tell apart
+ * from in use.
+ */
+static void find_used_cbs(struct qcom_smmu_priv *priv, u8 *used)
+{
+	u32 val;
+	int cbx, i;
+
+	for (i = 0; i < priv->num_smr; i++) {
+		if (!(gr0_readl(priv, ARM_SMMU_GR0_SMR(i)) & ARM_SMMU_SMR_VALID))
+			continue;
+
+		val = gr0_readl(priv, ARM_SMMU_GR0_S2CR(i));
+		if (FIELD_GET(ARM_SMMU_S2CR_TYPE, val) != S2CR_TYPE_TRANS)
+			continue;
+
+		cbx = FIELD_GET(ARM_SMMU_S2CR_CBNDX, val);
+		if (cbx < priv->num_cb)
+			used[cbx] = 1;
+	}
+}
+
 /* Find and init the first free context bank */
 static int alloc_cb(struct qcom_smmu_priv *priv)
 {
 	u32 cbar, type, vmid, val;
+	int ret = -1;
+	u8 *used;
+
+	used = calloc(priv->num_cb, 1);
+	if (!used)
+		return -ENOMEM;
+
+	find_used_cbs(priv, used);
 
 	for (int i = 0; i < priv->num_cb; i++) {
-		cbar = gr1_readl(priv, ARM_SMMU_GR1_CBAR(i));
-		type = FIELD_GET(ARM_SMMU_CBAR_TYPE, cbar);
-		vmid = FIELD_GET(ARM_SMMU_CBAR_VMID, cbar);
-
-		/* Check that the context bank is available. We haven't reset the SMMU so
-		 * we just make a best guess.
-		 */
-		if (type != CBAR_TYPE_S2_TRANS &&
-		    (type != CBAR_TYPE_S1_TRANS_S2_BYPASS ||
-		     vmid != VMID_UNUSED))
+		if (used[i])
 			continue;
 
+		cbar = gr1_readl(priv, ARM_SMMU_GR1_CBAR(i));
 		debug("%s: Found free context bank %d (cbar %#x)\n",
 		      priv->dev->name, i, cbar);
 		type = CBAR_TYPE_S1_TRANS_S2_BYPASS;
@@ -216,10 +247,13 @@ static int alloc_cb(struct qcom_smmu_priv *priv)
 
 		val = IS_ENABLED(CONFIG_ARM64) == 1 ? ARM_SMMU_CBA2R_VA64 : 0;
 		gr1_setbits(priv, ARM_SMMU_GR1_CBA2R(i), val);
-		return i;
+		ret = i;
+		break;
 	}
 
-	return -1;
+	free(used);
+
+	return ret;
 }
 
 /* Search for a context bank that is already configured for this stream
@@ -340,9 +374,16 @@ static inline void dump_boot_mappings(struct qcom_smmu_priv *priv)
 	debug("  SMMU dump boot mappings:\n");
 	for (i = 0; i < priv->num_smr; i++) {
 		val = gr0_readl(priv, ARM_SMMU_GR0_SMR(i));
-		if (val & ARM_SMMU_SMR_VALID)
-			debug("\tSMR %3d: SID: %#lx\n", i,
-			      FIELD_GET(ARM_SMMU_SMR_ID, val));
+		if (!(val & ARM_SMMU_SMR_VALID))
+			continue;
+
+		debug("\tSMR %3d: SID: %#lx", i,
+		      FIELD_GET(ARM_SMMU_SMR_ID, val));
+
+		val = gr0_readl(priv, ARM_SMMU_GR0_S2CR(i));
+		debug(" S2CR type %lu CB %lu\n",
+		      FIELD_GET(ARM_SMMU_S2CR_TYPE, val),
+		      FIELD_GET(ARM_SMMU_S2CR_CBNDX, val));
 	}
 }
 #else
