@@ -29,7 +29,7 @@ DECLARE_GLOBAL_DATA_PTR;
  * The SPL device tree does not describe the complete early physical layout,
  * so use Shikra's fixed map when enabling the MMU.
  */
-#define SHIKRA_SPL_DEVICE_REG_LOW_BASE		0x00000000UL
+#define SHIKRA_SPL_DEVICE_REG_LOW_BASE	0x00100000UL
 #define SHIKRA_SPL_SYSTEM_IMEM_BASE		0x0c100000UL
 #define SHIKRA_SPL_SYSTEM_IMEM_SIZE		0x00020000UL
 #define SHIKRA_SPL_BOOTIMEM_BASE		0x0c200000UL
