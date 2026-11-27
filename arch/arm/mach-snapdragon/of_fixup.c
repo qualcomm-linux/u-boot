@@ -25,11 +25,16 @@
 #include <dm/lists.h>
 #include <event.h>
 #include <fdt_support.h>
+#include <linux/bitops.h>
+#include <linux/err.h>
 #include <linux/errno.h>
 #include <linker_lists.h>
+#include <log.h>
 #include <stdlib.h>
 #include <tee/optee.h>
 #include <time.h>
+#include <soc/qcom/smem.h>
+#include <soc/qcom/socinfo.h>
 
 /**
  * find_ssphy_node() - Find the super-speed PHY node referenced by DWC3
@@ -281,6 +286,223 @@ static int qcom_of_fixup_nodes(void * __maybe_unused ctx, struct event *event)
 
 EVENT_SPY_FULL(EVT_OF_LIVE_BUILT, qcom_of_fixup_nodes);
 
+#define QCOM_MAX_CPU_CLUSTERS	8
+
+/**
+ * qcom_get_disabled_cpus() - Read the per-cluster disabled CPU masks
+ * @masks: Array to fill, one bitmask per CPU cluster (bit n = core n)
+ * @max: Number of entries in @masks
+ *
+ * The boot firmware publishes, in the socinfo SMEM item (format >= 14),
+ * an array with one u32 per CPU cluster where a set bit means the
+ * corresponding core is fused off on this SKU.
+ *
+ * Return: number of clusters filled in, or negative error code
+ */
+static int qcom_get_disabled_cpus(u32 *masks, unsigned int max)
+{
+	struct socinfo *info;
+	size_t size;
+	u32 num, offset, i;
+	const __le32 *array;
+
+	info = qcom_smem_get(QCOM_SMEM_HOST_ANY, SMEM_HW_SW_BUILD_ID, &size);
+	if (IS_ERR_OR_NULL(info))
+		return -ENODEV;
+
+	if (size < offsetof(struct socinfo, ncluster_array_offset) +
+		   sizeof(info->ncluster_array_offset) ||
+	    le32_to_cpu(info->fmt) < SOCINFO_VERSION(0, 14))
+		return -ENOENT;
+
+	num = le32_to_cpu(info->num_clusters);
+	offset = le32_to_cpu(info->ncluster_array_offset);
+	if (!num || !offset || offset > size ||
+	    num > (size - offset) / sizeof(*array))
+		return -ENOENT;
+
+	if (num > max) {
+		log_warning("%u CPU clusters in socinfo, checking first %u\n",
+			    num, max);
+		num = max;
+	}
+
+	array = (const __le32 *)((const u8 *)info + offset);
+	for (i = 0; i < num; i++)
+		masks[i] = le32_to_cpu(array[i]);
+
+	return num;
+}
+
+/**
+ * fdt_renumber_subnodes() - Close the gap left by a deleted numbered node
+ * @blob: FDT blob
+ * @parent: Path of the parent node
+ * @prefix: Name prefix of the numbered subnodes ("cluster" or "core")
+ * @from: Index of the deleted subnode
+ *
+ * The Linux cpu-map parser walks clusterN and coreN nodes in order and
+ * stops at the first missing index, so rename prefix(from + 1)... down
+ * by one.
+ */
+static void fdt_renumber_subnodes(void *blob, const char *parent,
+				  const char *prefix, int from)
+{
+	char path[64], name[16];
+	int node, i, ret;
+
+	for (i = from + 1; ; i++) {
+		snprintf(path, sizeof(path), "%s/%s%d", parent, prefix, i);
+		node = fdt_path_offset(blob, path);
+		if (node < 0)
+			break;
+
+		snprintf(name, sizeof(name), "%s%d", prefix, i - 1);
+		ret = fdt_set_name(blob, node, name);
+		if (ret) {
+			log_err("Failed to rename %s: %s\n", path,
+				fdt_strerror(ret));
+			break;
+		}
+	}
+}
+
+/**
+ * fdt_remove_cpu() - Remove a fused-off CPU from the kernel devicetree
+ * @blob: FDT blob
+ * @cluster: Cluster index in /cpus/cpu-map
+ * @core: Core index within the cluster
+ *
+ * Removes the cpu-map coreN entry, the CPU node it points to, and the
+ * CPU's PSCI power domain under /psci, which nothing else references.
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+static int fdt_remove_cpu(void *blob, int cluster, int core)
+{
+	char cluster_path[48], core_path[64];
+	const char *cpu_name;
+	const fdt32_t *pds;
+	u32 cpu_phandle, pd_phandle = 0;
+	int core_node, cpu_node, pd_node, parent, len, ret;
+
+	snprintf(cluster_path, sizeof(cluster_path),
+		 "/cpus/cpu-map/cluster%d", cluster);
+	snprintf(core_path, sizeof(core_path), "%s/core%d",
+		 cluster_path, core);
+
+	core_node = fdt_path_offset(blob, core_path);
+	if (core_node < 0)
+		return core_node;
+
+	cpu_phandle = fdt_getprop_u32_default_node(blob, core_node, 0, "cpu", 0);
+	if (!cpu_phandle) {
+		/* e.g. SMT cores described with threadN subnodes */
+		log_warning("%s has no cpu phandle, not removing\n", core_path);
+		return -ENOENT;
+	}
+
+	cpu_node = fdt_node_offset_by_phandle(blob, cpu_phandle);
+	if (cpu_node < 0)
+		return cpu_node;
+	cpu_name = fdt_get_name(blob, cpu_node, NULL);
+
+	/* Only drop the PSCI domain if it is a per-CPU domain under /psci */
+	pds = fdt_getprop(blob, cpu_node, "power-domains", &len);
+	if (pds && len >= (int)sizeof(*pds)) {
+		pd_node = fdt_node_offset_by_phandle(blob,
+						     fdt32_to_cpu(pds[0]));
+		parent = pd_node >= 0 ? fdt_parent_offset(blob, pd_node) : -1;
+		if (parent >= 0 &&
+		    !strcmp(fdt_get_name(blob, parent, NULL), "psci") &&
+		    !strncmp(fdt_get_name(blob, pd_node, NULL),
+			     "power-domain-cpu", strlen("power-domain-cpu")))
+			pd_phandle = fdt32_to_cpu(pds[0]);
+	}
+
+	printf("   Removing fused-off CPU %s (cluster %d core %d)\n",
+	       cpu_name, cluster, core);
+
+	/* Offsets change after each deletion, so look each node up again */
+	ret = fdt_del_node(blob, fdt_path_offset(blob, core_path));
+	if (ret)
+		return ret;
+
+	ret = fdt_del_node(blob, fdt_node_offset_by_phandle(blob, cpu_phandle));
+	if (ret)
+		return ret;
+
+	if (pd_phandle) {
+		ret = fdt_del_node(blob,
+				   fdt_node_offset_by_phandle(blob, pd_phandle));
+		if (ret)
+			return ret;
+	}
+
+	fdt_renumber_subnodes(blob, cluster_path, "core", core);
+
+	return 0;
+}
+
+/**
+ * qcom_fixup_disabled_cpus() - Drop fused-off CPUs from the kernel DT
+ * @blob: Kernel FDT blob
+ *
+ * Some SKUs share a die with a full-featured SoC but have CPU cores fused
+ * off, e.g. IQ10 SKUs with 17 of Nord's 18 cores enabled. The kernel DT
+ * describes every core, so Linux tries to bring the missing ones online
+ * and fails. Remove them based on the socinfo disabled-CPU masks.
+ *
+ * Socinfo cluster/core indices are matched against /cpus/cpu-map
+ * clusterN/coreM, which only holds where the two numberings agree, so
+ * this is restricted to platforms where that has been checked.
+ */
+static void qcom_fixup_disabled_cpus(void *blob)
+{
+	u32 masks[QCOM_MAX_CPU_CLUSTERS] = { 0 };
+	char cluster_path[48];
+	int num, cluster, core, node;
+
+	if (fdt_node_check_compatible(blob, 0, "qcom,nord"))
+		return;
+
+	num = qcom_get_disabled_cpus(masks, ARRAY_SIZE(masks));
+	if (num <= 0)
+		return;
+
+	/*
+	 * Go from the highest index down so the renumbering done after
+	 * each removal never shifts an index that is still to be visited.
+	 */
+	for (cluster = num - 1; cluster >= 0; cluster--) {
+		if (!masks[cluster])
+			continue;
+
+		for (core = 31; core >= 0; core--) {
+			if (!(masks[cluster] & BIT(core)))
+				continue;
+
+			if (cluster == 0 && core == 0) {
+				log_warning("Boot CPU reported disabled, ignoring\n");
+				continue;
+			}
+
+			if (fdt_remove_cpu(blob, cluster, core))
+				log_warning("Failed to remove CPU cluster %d core %d\n",
+					    cluster, core);
+		}
+
+		/* Drop the cluster entirely if no cores are left */
+		snprintf(cluster_path, sizeof(cluster_path),
+			 "/cpus/cpu-map/cluster%d", cluster);
+		node = fdt_path_offset(blob, cluster_path);
+		if (node >= 0 && fdt_first_subnode(blob, node) < 0 &&
+		    !fdt_del_node(blob, node))
+			fdt_renumber_subnodes(blob, "/cpus/cpu-map", "cluster",
+					      cluster);
+	}
+}
+
 int ft_board_setup(void *blob, struct bd_info __maybe_unused *bd)
 {
 	struct device_node *uboot_parent_np, *uboot_node_np;
@@ -288,6 +510,8 @@ int ft_board_setup(void *blob, struct bd_info __maybe_unused *bd)
 	const char *name;
 	const void *prop;
 	int proplen;
+
+	qcom_fixup_disabled_cpus(blob);
 
 	/* Only apply fixup for QCS615, QCS6490, and QCS8300 platforms */
 	if (!of_device_is_compatible(gd->of_root, "qcom,talos-evk", NULL, NULL) &&
