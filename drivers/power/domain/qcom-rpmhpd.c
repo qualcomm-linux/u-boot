@@ -12,6 +12,7 @@
 #include <soc/qcom/cmd-db.h>
 #include <soc/qcom/rpmh.h>
 #include <dt-bindings/power/qcom-rpmpd.h>
+#include <dt-bindings/power/qcom,rpmhpd.h>
 #include <dm/device_compat.h>
 
 #define RPMH_ARC_MAX_LEVELS	16
@@ -59,6 +60,39 @@ static struct rpmhpd mmcx_ao = {
 	.res_name = "mmcx.lvl",
 };
 
+static struct rpmhpd cx = {
+	.res_name = "cx.lvl",
+};
+
+static struct rpmhpd cx_ao = {
+	.res_name = "cx.lvl",
+};
+
+static struct rpmhpd ebi = {
+	.res_name = "ebi.lvl",
+};
+
+static struct rpmhpd mss = {
+	.res_name = "mss.lvl",
+};
+
+static struct rpmhpd mx = {
+	.res_name = "mx.lvl",
+};
+
+static struct rpmhpd mx_ao = {
+	.res_name = "mx.lvl",
+};
+
+static struct rpmhpd mxc = {
+	.res_name = "mxc.lvl",
+	.skip_retention_level = true,
+};
+
+static struct rpmhpd nsp = {
+	.res_name = "nsp.lvl",
+};
+
 /* SA8775P RPMH power domains */
 static struct rpmhpd *sa8775p_rpmhpds[] = {
 	[SA8775P_MMCX] = &mmcx,
@@ -68,6 +102,23 @@ static struct rpmhpd *sa8775p_rpmhpds[] = {
 static const struct rpmhpd_desc sa8775p_desc = {
 	.rpmhpds = sa8775p_rpmhpds,
 	.num_pds = ARRAY_SIZE(sa8775p_rpmhpds),
+};
+
+/* Echo RPMH power domains */
+static struct rpmhpd *echo_rpmhpds[] = {
+	[RPMHPD_CX] = &cx,
+	[RPMHPD_CX_AO] = &cx_ao,
+	[RPMHPD_EBI] = &ebi,
+	[RPMHPD_MSS] = &mss,
+	[RPMHPD_MX] = &mx,
+	[RPMHPD_MX_AO] = &mx_ao,
+	[RPMHPD_MXC] = &mxc,
+	[RPMHPD_NSP] = &nsp,
+};
+
+static const struct rpmhpd_desc echo_desc = {
+	.rpmhpds = echo_rpmhpds,
+	.num_pds = ARRAY_SIZE(echo_rpmhpds),
 };
 
 /* stub RPMH power domains mapped for unsupported platforms */
@@ -80,6 +131,7 @@ static const struct rpmhpd_desc stub_desc = {
 
 static const struct udevice_id rpmhpd_match_table[] = {
 	{ .compatible = "qcom,sa8775p-rpmhpd", .data = (ulong)&sa8775p_desc },
+	{ .compatible = "qcom,echo-rpmhpd", .data = (ulong)&echo_desc },
 	{ .compatible = "qcom,qcs615-rpmhpd", .data = (ulong)&stub_desc },
 	{ .compatible = "qcom,qcs8300-rpmhpd", .data = (ulong)&stub_desc },
 	{ .compatible = "qcom,qdu1000-rpmhpd", .data = (ulong)&stub_desc },

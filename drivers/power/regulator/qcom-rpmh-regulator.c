@@ -74,6 +74,41 @@ enum rpmh_regulator_mode {
 
 
 /**
+ * enum regulator_hw_type - supported regulator types
+ * @SMPS:			Switch mode power supply.
+ * @LDO:			Linear Dropout regulator.
+ * @BOB:			Buck/Boost type regulator.
+ * @VS:				Simple voltage ON/OFF switch.
+ * @NUM_REGULATOR_TYPES:	Number of regulator types.
+ */
+enum regulator_hw_type {
+	SMPS,
+	LDO,
+	BOB,
+	VS,
+	NUM_REGULATOR_TYPES,
+};
+
+/**
+ * struct resource_name_formats - RPMh resource name formats of a regulator type
+ * @rsc_name_fmt:	Used when the PMIC ID has the "_E" form, e.g. "B_E0".
+ *			Fields: index, PMIC ID.  Example: "L1B_E0"
+ * @rsc_name_fmt1:	Used for the other PMIC IDs, e.g. "b".
+ *			Fields: PMIC ID, index.  Example: "ldob1"
+ */
+struct resource_name_formats {
+	const char *rsc_name_fmt;
+	const char *rsc_name_fmt1;
+};
+
+static const struct resource_name_formats vreg_rsc_name_lookup[NUM_REGULATOR_TYPES] = {
+	[SMPS]	= {"S%d%s", "smp%s%d"},
+	[LDO]	= {"L%d%s", "ldo%s%d"},
+	[BOB]	= {"B%d%s", "bob%s%d"},
+	[VS]	= {"VS%d%s", "vs%s%d"},
+};
+
+/**
  * struct linear_range - table of selector - value pairs
  *
  * Define a lookup-table for range of values. Intended to help when looking
@@ -107,10 +142,14 @@ struct linear_range {
  * @regulator_type:		RPMh accelerator type used to manage this
  *				regulator
  * @ops:			Pointer to regulator ops callback structure
- * @voltage_range:		The single range of voltages supported by this
+ * @voltage_range:		The (lowest) range of voltages supported by this
  *				PMIC regulator type
+ * @voltage_range_hi:		Optional second range, above voltage_range, for
+ *				regulators whose step size changes with the
+ *				voltage (e.g. FTSMPS525).  Selectors continue
+ *				from voltage_range.  Unused if its step is 0.
  * @n_voltages:			The number of unique voltage set points defined
- *				by voltage_range
+ *				by the voltage ranges
  * @hpm_min_load_uA:		Minimum load current in microamps that requires
  *				high power mode (HPM) operation.  This is used
  *				for LDO hardware type regulators only.
@@ -125,6 +164,7 @@ struct rpmh_vreg_hw_data {
 	enum rpmh_regulator_type		regulator_type;
 	const struct dm_regulator_ops		*ops;
 	struct linear_range			voltage_range;
+	struct linear_range			voltage_range_hi;
 	int					n_voltages;
 	int					hpm_min_load_uA;
 	struct dm_regulator_mode		*pmic_mode_map;
@@ -176,13 +216,20 @@ struct rpmh_vreg {
  *				This must include exactly one field: '%s' which
  *				is filled at run-time with the PMIC ID provided
  *				by device tree property qcom,pmic-id.  Example:
- *				"ldo%s1" for RPMh resource "ldoa1".
+ *				"ldo%s1" for RPMh resource "ldoa1".  NULL if
+ *				the name is built from vreg_hw_type and index
+ *				(see RPMH_VREG_IDX()).
+ * @vreg_hw_type:		Regulator hardware type, used with index to build
+ *				the resource name when resource_name is NULL
+ * @index:			Regulator index within its hardware type
  * @supply_name:		Parent supply regulator name
  * @hw_data:			Configuration data for this PMIC regulator type
  */
 struct rpmh_vreg_init_data {
 	const char			*name;
 	const char			*resource_name;
+	enum regulator_hw_type		vreg_hw_type;
+	int				index;
 	const char			*supply_name;
 	const struct rpmh_vreg_hw_data	*hw_data;
 };
@@ -214,6 +261,44 @@ static int rpmh_regulator_read_data(struct rpmh_vreg *vreg, struct tcs_cmd *cmd)
 	return rpmh_read(vreg->dev->parent, RPMH_ACTIVE_ONLY_STATE, cmd);
 }
 
+/* Highest voltage supported by the regulator hardware */
+static int rpmh_vreg_max_uv(const struct rpmh_vreg_hw_data *hw_data)
+{
+	const struct linear_range *range = &hw_data->voltage_range;
+
+	if (hw_data->voltage_range_hi.step)
+		range = &hw_data->voltage_range_hi;
+
+	return range->min + (range->max_sel - range->min_sel) * range->step;
+}
+
+/*
+ * Voltage in uV rounded up to the nearest step the regulator hardware
+ * supports, within the supported range, so the request is never undershot.
+ */
+static int rpmh_vreg_round_uv(const struct rpmh_vreg_hw_data *hw_data, int uv)
+{
+	const struct linear_range *range = &hw_data->voltage_range;
+	int max_uv = rpmh_vreg_max_uv(hw_data);
+
+	if (hw_data->voltage_range_hi.step && uv >= hw_data->voltage_range_hi.min)
+		range = &hw_data->voltage_range_hi;
+
+	if (uv < range->min)
+		uv = range->min;
+	if (uv > max_uv)
+		uv = max_uv;
+
+	uv = range->min + DIV_ROUND_UP(uv - range->min, range->step) * range->step;
+
+	/* Rounded up past the end of the low range, so use the first step of the high one */
+	if (range == &hw_data->voltage_range && hw_data->voltage_range_hi.step &&
+	    uv > range->min + (range->max_sel - range->min_sel) * range->step)
+		uv = hw_data->voltage_range_hi.min;
+
+	return uv;
+}
+
 static int rpmh_regulator_vrm_get_voltage(struct udevice *rdev, int *uV)
 {
 	struct rpmh_vreg *vreg = dev_get_priv(rdev);
@@ -222,7 +307,7 @@ static int rpmh_regulator_vrm_get_voltage(struct udevice *rdev, int *uV)
 	};
 	const struct linear_range *uv_range = &vreg->hw_data->voltage_range;
 	int min_uV = uv_range->min;
-	int max_uV = uv_range->min + uv_range->max_sel * uv_range->step;
+	int max_uV = rpmh_vreg_max_uv(vreg->hw_data);
 
 	int ret, _uV = 0;
 
@@ -249,11 +334,8 @@ static int _rpmh_regulator_vrm_set_value(struct udevice *rdev,
 		.addr = vreg->addr + RPMH_REGULATOR_REG_VRM_VOLTAGE,
 	};
 	int ret;
-	unsigned int selector;
 
-	selector = (uv - vreg->hw_data->voltage_range.min) / vreg->hw_data->voltage_range.step;
-	cmd.data = DIV_ROUND_UP(vreg->hw_data->voltage_range.min +
-				selector * vreg->hw_data->voltage_range.step, 1000);
+	cmd.data = DIV_ROUND_UP(rpmh_vreg_round_uv(vreg->hw_data, uv), 1000);
 
 	ret = rpmh_regulator_send_request(vreg, &cmd, wait_for_ack);
 	if (!ret)
@@ -529,6 +611,16 @@ static const struct rpmh_vreg_hw_data pmic5_ftsmps520 = {
 	.n_modes = ARRAY_SIZE(pmic_mode_map_pmic5_smps),
 };
 
+static const struct rpmh_vreg_hw_data pmic5_ftsmps525 = {
+	.regulator_type = VRM,
+	.ops = &rpmh_regulator_vrm_drms_ops,
+	.voltage_range = REGULATOR_LINEAR_RANGE(300000, 0, 267, 4000),
+	.voltage_range_hi = REGULATOR_LINEAR_RANGE(1376000, 268, 438, 8000),
+	.n_voltages = 439,
+	.pmic_mode_map = pmic_mode_map_pmic5_smps,
+	.n_modes = ARRAY_SIZE(pmic_mode_map_pmic5_smps),
+};
+
 static const struct rpmh_vreg_hw_data pmic5_ftsmps525_lv = {
 	.regulator_type = VRM,
 	.ops = &rpmh_regulator_vrm_drms_ops,
@@ -626,6 +718,19 @@ static const struct rpmh_vreg_hw_data pmic5_pldo515_mv = {
 { \
 	.name		= _name, \
 	.resource_name	= _resource_name, \
+	.hw_data	= _hw_data, \
+	.supply_name	= _supply_name, \
+}
+
+/*
+ * Same arguments as the Linux driver, for regulators whose RPMh resource name
+ * depends on the PMIC ID format.  See vreg_rsc_name_lookup.
+ */
+#define RPMH_VREG_IDX(_name, _vreg_hw_type, _index, _hw_data, _supply_name) \
+{ \
+	.name		= _name, \
+	.vreg_hw_type	= _vreg_hw_type, \
+	.index		= _index, \
 	.hw_data	= _hw_data, \
 	.supply_name	= _supply_name, \
 }
@@ -868,6 +973,46 @@ static const struct rpmh_vreg_init_data pm7325_vreg_data[] = {
 	{}
 };
 
+static const struct rpmh_vreg_init_data pmg1110_vreg_data[] = {
+	RPMH_VREG_IDX("smps1",  SMPS, 1,  &pmic5_ftsmps510, "vdd-s1"),
+	{}
+};
+
+static const struct rpmh_vreg_init_data pmx75_vreg_data[] = {
+	RPMH_VREG_IDX("smps1",  SMPS, 1,  &pmic5_ftsmps525, "vdd-s1"),
+	RPMH_VREG_IDX("smps2",  SMPS, 2,  &pmic5_ftsmps525, "vdd-s2"),
+	RPMH_VREG_IDX("smps3",  SMPS, 3,  &pmic5_ftsmps525, "vdd-s3"),
+	RPMH_VREG_IDX("smps4",  SMPS, 4,  &pmic5_ftsmps525, "vdd-s4"),
+	RPMH_VREG_IDX("smps5",  SMPS, 5,  &pmic5_ftsmps525, "vdd-s5"),
+	RPMH_VREG_IDX("smps6",  SMPS, 6,  &pmic5_ftsmps525, "vdd-s6"),
+	RPMH_VREG_IDX("smps7",  SMPS, 7,  &pmic5_ftsmps525, "vdd-s7"),
+	RPMH_VREG_IDX("smps8",  SMPS, 8,  &pmic5_ftsmps525, "vdd-s8"),
+	RPMH_VREG_IDX("smps9",  SMPS, 9,  &pmic5_ftsmps525, "vdd-s9"),
+	RPMH_VREG_IDX("smps10", SMPS, 10, &pmic5_ftsmps525, "vdd-s10"),
+	RPMH_VREG_IDX("ldo1",   LDO,  1,  &pmic5_nldo515,   "vdd-l1"),
+	RPMH_VREG_IDX("ldo2",   LDO,  2,  &pmic5_nldo515,   "vdd-l2-18"),
+	RPMH_VREG_IDX("ldo3",   LDO,  3,  &pmic5_nldo515,   "vdd-l3"),
+	RPMH_VREG_IDX("ldo4",   LDO,  4,  &pmic5_nldo515,   "vdd-l4-l16"),
+	RPMH_VREG_IDX("ldo5",   LDO,  5,  &pmic5_pldo_lv,   "vdd-l5-l6"),
+	RPMH_VREG_IDX("ldo6",   LDO,  6,  &pmic5_pldo_lv,   "vdd-l5-l6"),
+	RPMH_VREG_IDX("ldo7",   LDO,  7,  &pmic5_nldo515,   "vdd-l7"),
+	RPMH_VREG_IDX("ldo8",   LDO,  8,  &pmic5_nldo515,   "vdd-l8-l9"),
+	RPMH_VREG_IDX("ldo9",   LDO,  9,  &pmic5_nldo515,   "vdd-l8-l9"),
+	RPMH_VREG_IDX("ldo10",  LDO,  10, &pmic5_pldo,      "vdd-l10"),
+	RPMH_VREG_IDX("ldo11",  LDO,  11, &pmic5_pldo,      "vdd-l11-l13"),
+	RPMH_VREG_IDX("ldo12",  LDO,  12, &pmic5_nldo515,   "vdd-l12"),
+	RPMH_VREG_IDX("ldo13",  LDO,  13, &pmic5_pldo,      "vdd-l11-l13"),
+	RPMH_VREG_IDX("ldo14",  LDO,  14, &pmic5_nldo515,   "vdd-l14"),
+	RPMH_VREG_IDX("ldo15",  LDO,  15, &pmic5_nldo515,   "vdd-l15"),
+	RPMH_VREG_IDX("ldo16",  LDO,  16, &pmic5_nldo515,   "vdd-l4-l16"),
+	RPMH_VREG_IDX("ldo17",  LDO,  17, &pmic5_nldo515,   "vdd-l17"),
+	/* ldo18 not configured */
+	RPMH_VREG_IDX("ldo19",  LDO,  19, &pmic5_nldo515,   "vdd-l19"),
+	RPMH_VREG_IDX("ldo20",  LDO,  20, &pmic5_nldo515,   "vdd-l20-l21"),
+	RPMH_VREG_IDX("ldo21",  LDO,  21, &pmic5_nldo515,   "vdd-l20-l21"),
+	{}
+};
+
 /* probe an individual regulator */
 static int rpmh_regulator_probe(struct udevice *dev)
 {
@@ -924,6 +1069,24 @@ vreg_get_init_data(const struct rpmh_vreg_init_data *init_data, ofnode node)
 	return NULL;
 }
 
+/*
+ * Build the RPMh resource name of a regulator that is described by its
+ * hardware type and index.  PMIC IDs of the form "B_E0" name the resource as
+ * <type><index><pmic-id> (e.g. "L1B_E0"), the others as <type><pmic-id><index>
+ * (e.g. "ldob1").
+ */
+static int rpmh_regulator_get_rsc_name(const struct rpmh_vreg_init_data *data,
+				       const char *pmic_id, char *name, size_t len)
+{
+	const struct resource_name_formats *fmts =
+		&vreg_rsc_name_lookup[data->vreg_hw_type];
+
+	if (strlen(pmic_id) > 1 && strstr(pmic_id, "_E"))
+		return snprintf(name, len, fmts->rsc_name_fmt, data->index, pmic_id);
+
+	return snprintf(name, len, fmts->rsc_name_fmt1, pmic_id, data->index);
+}
+
 static int rpmh_regulators_bind(struct udevice *dev)
 {
 	const struct rpmh_vreg_init_data *init_data, *data;
@@ -953,10 +1116,23 @@ static int rpmh_regulators_bind(struct udevice *dev)
 		if (!data)
 			continue;
 
-		/* %s is replaced with pmic_id, so subtract 2, then add 1 for the null terminator */
-		namelen = strlen(data->resource_name) + strlen(pmic_id) - 1;
+		if (data->resource_name) {
+			/* %s is replaced with pmic_id, so subtract 2, then add 1 for the null terminator */
+			namelen = strlen(data->resource_name) + strlen(pmic_id) - 1;
+		} else {
+			/* Large enough for either format, plus the PMIC ID and null terminator */
+			namelen = strlen(vreg_rsc_name_lookup[data->vreg_hw_type].rsc_name_fmt) +
+				  strlen(vreg_rsc_name_lookup[data->vreg_hw_type].rsc_name_fmt1) +
+				  strlen(pmic_id) + 1;
+		}
 		name = devm_kzalloc(dev, namelen, GFP_KERNEL);
-		ret = snprintf(name, namelen, data->resource_name, pmic_id);
+		if (!name)
+			return -ENOMEM;
+
+		if (data->resource_name)
+			ret = snprintf(name, namelen, data->resource_name, pmic_id);
+		else
+			ret = rpmh_regulator_get_rsc_name(data, pmic_id, name, namelen);
 		if (ret < 0 || ret >= namelen) {
 			dev_err(dev, "Failed to create RPMh regulator name\n");
 			return -ENOMEM;
@@ -1015,8 +1191,16 @@ static const struct udevice_id rpmh_regulator_ids[] = {
 		.data = (ulong)pmc8380_vreg_data,
 	},
 	{
+		.compatible = "qcom,pmg1110-rpmh-regulators",
+		.data = (ulong)pmg1110_vreg_data,
+	},
+	{
 		.compatible = "qcom,pmm8654au-rpmh-regulators",
 		.data = (ulong)pmm8654au_vreg_data,
+	},
+	{
+		.compatible = "qcom,pmx75-rpmh-regulators",
+		.data = (ulong)pmx75_vreg_data,
 	},
 	{ /* sentinal */ },
 };

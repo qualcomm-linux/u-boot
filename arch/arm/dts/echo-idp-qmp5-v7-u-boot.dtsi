@@ -188,3 +188,16 @@
 &pon_resin {
 	status = "okay";
 };
+
+/*
+ * The PMG1110 (PMIC K) regulator bank is not present on this board: its
+ * "S1K_E0" resource is missing from cmd-db, so the rpmh-regulator probe
+ * fails with "Failed to read RPMh address for S1K_E0". Nothing in the
+ * U-Boot DT consumes vreg_s1k_0p9, so leave the bank unbound.
+ */
+&apps_rsc {
+        regulators-1 {
+                status = "disabled";
+        };
+};
+
