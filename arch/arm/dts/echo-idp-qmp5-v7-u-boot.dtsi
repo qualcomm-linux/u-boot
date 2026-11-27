@@ -95,6 +95,18 @@
        status = "okay";
 };
 
+/*
+ * i2c5 (i2c@a94000, aliased as i2c2 -> `i2c dev 2`) is "disabled" in
+ * echo.dtsi; enable it so the GENI I2C driver binds.
+ */
+&i2c5 {
+       status = "okay";
+};
+
+&i2c2 {
+       status = "okay";
+};
+
 &usb_1 {
 	/*
 	 * echo.dtsi declares usb_1 as non-flat "qcom,dwc3" but gives it no

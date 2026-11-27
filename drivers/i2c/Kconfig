@@ -656,6 +656,14 @@ config SYS_I2C_GENI
 	  bus protocols depending on the firmware type loaded at early boot time
 	  based on system configuration.
 
+config SYS_I2C_GENI_GPI
+	bool "GPI (GSI DMA) transfer mode for the GENI I2C controller"
+	depends on SYS_I2C_GENI
+	help
+	  Drive serial engines that were handed over in GSI mode (FIFO
+	  interface disabled) through the GPI DMA engine, using polled
+	  completions. Without this such engines are rejected at probe time.
+
 config SYS_I2C_S3C24X0
 	bool "Samsung I2C driver"
 	depends on DM_I2C
