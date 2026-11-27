@@ -52,14 +52,6 @@
 	bootph-all;
 };
 
-&ethernet0 {
-	max-speed = <2500>;
-};
-
-&serdes0 {
-	vdda-0p9-supply = <&vreg_l4a>;
-};
-
 /* RPMH clock controller - required by GCC */
 &rpmhcc {
 	bootph-all;
