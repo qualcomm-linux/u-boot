@@ -151,28 +151,24 @@ struct eqos_mtl_regs {
 #define EQOS_MTL_RXQ0_DEBUG_RXQSTS_SHIFT		4
 #define EQOS_MTL_RXQ0_DEBUG_RXQSTS_MASK			3
 
-/* Keep global DMA registers separate from per-channel registers. */
 #define EQOS_DMA_REGS_BASE 0x1000
 struct eqos_dma_regs {
 	u32 mode;					/* 0x1000 */
 	u32 sysbus_mode;				/* 0x1004 */
-};
-
-#define EQOS_DMA_CH_REGS_BASE 0x1100
-struct eqos_dma_ch_regs {
-	u32 ch0_control;				/* +0x00 */
-	u32 ch0_tx_control;			/* +0x04 */
-	u32 ch0_rx_control;			/* +0x08 */
-	u32 unused_0c;				/* +0x0c */
-	u32 ch0_txdesc_list_haddress;		/* +0x10 */
-	u32 ch0_txdesc_list_address;		/* +0x14 */
-	u32 ch0_rxdesc_list_haddress;		/* +0x18 */
-	u32 ch0_rxdesc_list_address;		/* +0x1c */
-	u32 ch0_txdesc_tail_pointer;		/* +0x20 */
-	u32 unused_24;				/* +0x24 */
-	u32 ch0_rxdesc_tail_pointer;		/* +0x28 */
-	u32 ch0_txdesc_ring_length;		/* +0x2c */
-	u32 ch0_rxdesc_ring_length;		/* +0x30 */
+	u32 unused_1008[(0x1100 - 0x1008) / 4];	/* 0x1008 */
+	u32 ch0_control;				/* 0x1100 */
+	u32 ch0_tx_control;			/* 0x1104 */
+	u32 ch0_rx_control;			/* 0x1108 */
+	u32 unused_110c;				/* 0x110c */
+	u32 ch0_txdesc_list_haddress;		/* 0x1110 */
+	u32 ch0_txdesc_list_address;		/* 0x1114 */
+	u32 ch0_rxdesc_list_haddress;		/* 0x1118 */
+	u32 ch0_rxdesc_list_address;		/* 0x111c */
+	u32 ch0_txdesc_tail_pointer;		/* 0x1120 */
+	u32 unused_1124;				/* 0x1124 */
+	u32 ch0_rxdesc_tail_pointer;		/* 0x1128 */
+	u32 ch0_txdesc_ring_length;		/* 0x112c */
+	u32 ch0_rxdesc_ring_length;		/* 0x1130 */
 };
 
 #define EQOS_DMA_MODE_SWR				BIT(0)
@@ -246,8 +242,6 @@ struct eqos_config {
 	int config_mac;
 	int config_mac_mdio;
 	unsigned int axi_bus_width;
-	fdt_addr_t dma_ch_regs_base;
-	fdt_addr_t mtl_regs_base;
 	phy_interface_t (*interface)(const struct udevice *dev);
 	struct eqos_ops *ops;
 };
@@ -278,7 +272,6 @@ struct eqos_priv {
 	struct eqos_mac_regs *mac_regs;
 	struct eqos_mtl_regs *mtl_regs;
 	struct eqos_dma_regs *dma_regs;
-	struct eqos_dma_ch_regs *dma_ch_regs;
 	struct eqos_tegra186_regs *tegra186_regs;
 	void *eqos_qcom_rgmii_regs;
 	struct reset_ctl reset_ctl;
