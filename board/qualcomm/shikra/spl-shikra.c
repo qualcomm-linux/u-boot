@@ -24,6 +24,15 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
+/*
+ * RPM code and data RAM. Defined outside CONFIG_SPL_BUILD since
+ * qcom_spl_soc_rpm_reset() below needs them unconditionally.
+ */
+#define SHIKRA_SPL_RPM_CODE_BASE		0x04600000UL
+#define SHIKRA_SPL_RPM_CODE_SIZE		0x00030000UL
+#define SHIKRA_SPL_RPM_DATA_RAM_BASE		0x04690000UL
+#define SHIKRA_SPL_RPM_DATA_RAM_SIZE		0x00014000UL
+
 #if defined(CONFIG_SPL_BUILD)
 /*
  * The SPL device tree does not describe the complete early physical layout,
@@ -51,6 +60,24 @@ static struct mm_region shikra_spl_mem_map[] = {
 		.phys = SHIKRA_SPL_DEVICE_REG_LOW_BASE,
 		.size = SHIKRA_SPL_DEVICE_REG_LOW_SIZE,
 		.attrs = PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+			 PTE_BLOCK_NON_SHARE,
+	}, {
+		/*
+		 * RPM code RAM. Overlaps the device region above; map_range()
+		 * splits the existing block descriptor and this entry's
+		 * narrower, cacheable attrs win for its sub-range.
+		 */
+		.virt = SHIKRA_SPL_RPM_CODE_BASE,
+		.phys = SHIKRA_SPL_RPM_CODE_BASE,
+		.size = SHIKRA_SPL_RPM_CODE_SIZE,
+		.attrs = PTE_BLOCK_MEMTYPE(MT_NORMAL) |
+			 PTE_BLOCK_NON_SHARE,
+	}, {
+		/* RPM data RAM, same reasoning as above. */
+		.virt = SHIKRA_SPL_RPM_DATA_RAM_BASE,
+		.phys = SHIKRA_SPL_RPM_DATA_RAM_BASE,
+		.size = SHIKRA_SPL_RPM_DATA_RAM_SIZE,
+		.attrs = PTE_BLOCK_MEMTYPE(MT_NORMAL) |
 			 PTE_BLOCK_NON_SHARE,
 	}, {
 		.virt = SHIKRA_SPL_SYSTEM_IMEM_BASE,
@@ -91,6 +118,11 @@ static struct mm_region shikra_spl_mem_map[] = {
 struct mm_region *qcom_spl_mem_map(void)
 {
 	return shikra_spl_mem_map;
+}
+
+u64 get_page_table_size(void)
+{
+	return SZ_64K;
 }
 
 int arm_reserve_mmu(void)
@@ -408,6 +440,18 @@ int qcom_spl_soc_pre_qclib_routine(void)
 
 void qcom_spl_soc_rpm_reset(void)
 {
+	/*
+	 * RPM code and data RAM are mapped cacheable. RPM is a separate,
+	 * non-coherent bus master that fetches directly from physical
+	 * memory, so flush pending writes out of the cache before releasing
+	 * it from reset.
+	 */
+	flush_dcache_range(SHIKRA_SPL_RPM_CODE_BASE,
+			    SHIKRA_SPL_RPM_CODE_BASE + SHIKRA_SPL_RPM_CODE_SIZE);
+	flush_dcache_range(SHIKRA_SPL_RPM_DATA_RAM_BASE,
+			    SHIKRA_SPL_RPM_DATA_RAM_BASE +
+			    SHIKRA_SPL_RPM_DATA_RAM_SIZE);
+
 	clrbits_le32((void *)SHIKRA_GCC_APCS_MISC_ADDR,
 		     SHIKRA_GCC_APCS_MISC_RPM_RESET_BMSK);
 }
