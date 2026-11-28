@@ -161,3 +161,11 @@
 &usb_1 {
 	vbus-supply = <&usb0_vbus>;
 };
+
+&ethernet0 {
+	status = "disabled";
+};
+
+&serdes0 {
+	status = "disabled";
+};
