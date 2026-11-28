@@ -8,6 +8,13 @@
  * drivers/usb/host/xhci-pci-renesas.c (internal-RAM download path only -
  * this board has no external SPI ROM strapped to the controller).
  *
+ * The firmware image is not part of this source file. It is supplied at
+ * build time via CONFIG_USB_XHCI_PCI_RENESAS_FW_FILE and linked directly
+ * into the U-Boot binary by xhci-pci-renesas-fw-seed.S, since on boards
+ * where Ethernet is itself a USB-attached device behind this controller,
+ * USB must already be functional before any storage or network path
+ * exists to load firmware from at runtime.
+ *
  * Copyright (c) Qualcomm Technologies, Inc. All rights reserved.
  */
 
@@ -24,7 +31,8 @@
 #include <linux/delay.h>
 #include <usb/xhci.h>
 
-#include "xhci-pci-renesas-fw.h"
+extern char __renesas_xhci_fw_begin[];
+extern char __renesas_xhci_fw_end[];
 
 #define RENESAS_FW_VERSION		0x6c
 #define RENESAS_FW_VERSION_FIELD	GENMASK(23, 7)
@@ -228,18 +236,20 @@ static int renesas_fw_download(struct udevice *dev, const u32 *fw_data,
 
 static int renesas_xhci_check_request_fw(struct udevice *dev)
 {
+	size_t fw_size = __renesas_xhci_fw_end - __renesas_xhci_fw_begin;
+	const u32 *fw_data = (const u32 *)__renesas_xhci_fw_begin;
 	int ret;
 
 	ret = renesas_fw_check_running(dev);
 	if (ret <= 0)
 		return ret;
 
-	ret = renesas_fw_verify(renesas_fw_data, RENESAS_FW_SIZE * 4);
+	ret = renesas_fw_verify(fw_data, fw_size);
 	if (ret)
 		return ret;
 
 	log_err("renesas xhci: firmware not running, downloading\n");
-	return renesas_fw_download(dev, renesas_fw_data, RENESAS_FW_SIZE * 4);
+	return renesas_fw_download(dev, fw_data, fw_size);
 }
 
 static int xhci_pci_renesas_init(struct udevice *dev,

@@ -432,6 +432,7 @@ static int qcom_pcie_parse_dt(struct udevice *dev)
 {
 	struct qcom_pcie *priv = dev_get_priv(dev);
 	struct power_domain pd;
+	ofnode port_node;
 	int vreg, ret;
 
 	priv->dw.dbi_base = dev_read_addr_name_ptr(dev, "dbi");
@@ -452,11 +453,43 @@ static int qcom_pcie_parse_dt(struct udevice *dev)
 
 	dev_dbg(dev, "PARF address is 0x%p\n", priv->parf);
 
-	ret = gpio_request_by_name(dev, "perst-gpios", 0,
-				   &priv->rst_gpio, GPIOD_IS_OUT);
+	/*
+	 * Newer DTs carry 'reset-gpios'/'phys' on the Root Port child node
+	 * rather than on the controller node. Only -ENOENT means the DT uses
+	 * the legacy layout; any other error is real and must not fall back.
+	 */
+	ret = -ENOENT;
+	ofnode_for_each_subnode(port_node, dev_ofnode(dev)) {
+		const char *type = ofnode_read_string(port_node, "device_type");
+
+		if (!type || strcmp(type, "pci"))
+			continue;
+
+		ret = gpio_request_by_name_nodev(port_node, "reset-gpios", 0,
+						 &priv->rst_gpio, GPIOD_IS_OUT);
+		if (!ret) {
+			ret = generic_phy_get_by_index_nodev(port_node, 0,
+							     &priv->phy);
+			if (ret)
+				dm_gpio_free(dev, &priv->rst_gpio);
+		}
+
+		break;
+	}
+
 	if (ret) {
-		dev_err(dev, "failed to find reset-gpios property\n");
-		return ret;
+		if (ret != -ENOENT) {
+			dev_err(dev, "failed to parse root port binding (%d)\n",
+				ret);
+			return ret;
+		}
+
+		ret = gpio_request_by_name(dev, "perst-gpios", 0,
+					   &priv->rst_gpio, GPIOD_IS_OUT);
+		if (ret) {
+			dev_err(dev, "failed to find reset-gpios property\n");
+			return ret;
+		}
 	}
 
 	ret = reset_get_bulk(dev, &priv->rsts);
@@ -504,10 +537,12 @@ static int qcom_pcie_parse_dt(struct udevice *dev)
 			dev_warn(dev, "failed to enable power domain (%d)\n", ret);
 	}
 
-	ret = generic_phy_get_by_index(dev, 0, &priv->phy);
-	if (ret) {
-		dev_err(dev, "failed to get pcie phy (%d)\n", ret);
-		return ret;
+	if (!generic_phy_valid(&priv->phy)) {
+		ret = generic_phy_get_by_index(dev, 0, &priv->phy);
+		if (ret) {
+			dev_err(dev, "failed to get pcie phy (%d)\n", ret);
+			return ret;
+		}
 	}
 
 	for (vreg = 0; vreg < NUM_SUPPLIES; ++vreg) {
@@ -591,6 +626,28 @@ static int qcom_pcie_probe(struct udevice *dev)
 	return 0;
 }
 
+/**
+ * qcom_pcie_remove() - Release the resources acquired by qcom_pcie_probe()
+ *
+ * @dev: A pointer to the device being operated on
+ *
+ * The GPIO and PHY would otherwise stay held across a device_remove() and
+ * make a later re-probe fail to re-request them.
+ *
+ * Return: 0 on success
+ */
+static int qcom_pcie_remove(struct udevice *dev)
+{
+	struct qcom_pcie *priv = dev_get_priv(dev);
+
+	dm_gpio_set_value(&priv->rst_gpio, 1);
+	generic_phy_power_off(&priv->phy);
+	generic_phy_exit(&priv->phy);
+	dm_gpio_free(dev, &priv->rst_gpio);
+
+	return 0;
+}
+
 static const struct dm_pci_ops qcom_pcie_ops = {
 	.read_config	= pcie_dw_read_config,
 	.write_config	= pcie_dw_write_config,
@@ -623,5 +680,6 @@ U_BOOT_DRIVER(qcom_dw_pcie) = {
 	.of_match		= qcom_pcie_ids,
 	.ops			= &qcom_pcie_ops,
 	.probe			= qcom_pcie_probe,
+	.remove			= qcom_pcie_remove,
 	.priv_auto		= sizeof(struct qcom_pcie),
 };

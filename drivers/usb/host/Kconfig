@@ -108,9 +108,23 @@ config USB_XHCI_PCI_RENESAS
 	help
 	  Enables firmware download and xHCI bring-up support for the
 	  Renesas uPD720201/uPD720202 PCIe-to-USB3 host controller. This
-	  chip requires a firmware blob to be downloaded over PCI
+	  chip requires a firmware image to be downloaded over PCI
 	  configuration space before it functions as a standard xHCI
 	  controller.
+
+if USB_XHCI_PCI_RENESAS
+
+config USB_XHCI_PCI_RENESAS_FW_FILE
+	string "File with the Renesas uPD720201/uPD720202 firmware image"
+	depends on !COMPILE_TEST
+	default "renesas_usb_fw.mem"
+	help
+	  File with the Renesas uPD720201/uPD720202 firmware image, obtained
+	  separately. This file is linked into the U-Boot binary at build
+	  time. If a relative file path is used, it is relative to the
+	  source directory.
+
+endif
 
 config USB_XHCI_RCAR
 	bool "Renesas R-Car USB 3.0 support"
